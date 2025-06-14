@@ -23,18 +23,9 @@ public static class TrySprayingWeedKillerBottlePatch
             new CodeMatch(instruction => instruction.opcode == OpCodes.Blt_S || instruction.opcode == OpCodes.Blt)
         );
 
-        if (!matcher.IsValid)
-        {
-            Debug.Log("INVALID match!");
-            throw new System.Exception("Code matcher was unable to find a match, aborting.");
-        }
-        else
-        {
-            Debug.Log("Valid match!");
-        }
-
-        // Debugging output
-        Debug.Log($"Found instruction: {matcher.Instruction.opcode}, Operand: {matcher.Instruction.operand}");
+        // Move to the branch instruction (which is the last match)
+        matcher.Advance(4); // move from Ldloc_1 (start) to the 5th instruction matched
+        var branchInstr = matcher.Instruction;
 
         // Ensure it's a branch with a valid label
         if (!(matcher.Instruction.operand is Label ogBranchTarget))
