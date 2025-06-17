@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace CompanyHauler.Patches;
 
+// This patch makes weed killer avoid filling the Hauler with turbo boost. Does not affect cruiser at all.
 [HarmonyPatch(typeof(SprayPaintItem))]
 [HarmonyPatch(nameof(SprayPaintItem.TrySprayingWeedKillerBottle))]
 public static class TrySprayingWeedKillerBottlePatch

@@ -38,6 +38,10 @@ namespace CompanyHauler.Scripts
 
         public bool cablightToggle = false;
 
+        public Material cabinLightOnMat;
+
+        public Material cabinLightOffMat;
+
         // BACK-LEFT PASSENGER METHODS //////////////////////////
 
         public void OnBLExit()
@@ -273,11 +277,9 @@ namespace CompanyHauler.Scripts
             base.RemoveKeyFromIgnition();
         }
 
-        // Toggle cabin light button
         public void CabinLightToggle()
         {
-            cablightToggle = !cablightToggle;
-            SetFrontCabinLightOn(cablightToggle);
+            SetFrontCabinLightOn(!cablightToggle);
         }
 
     }
