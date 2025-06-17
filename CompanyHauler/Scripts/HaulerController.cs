@@ -1,4 +1,5 @@
 ﻿using GameNetcodeStuff;
+using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -41,6 +42,10 @@ namespace CompanyHauler.Scripts
         public Material cabinLightOnMat;
 
         public Material cabinLightOffMat;
+
+        public GameObject screensContainer;
+
+        public TextMeshProUGUI dotMatrix;
 
         // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -198,12 +203,23 @@ namespace CompanyHauler.Scripts
             }
         }
 
-        // Re-enable the door triggers after getting in
+        // Additional things to do on update
         public new void Update()
         {
             base.Update();
+
+            // Re-enable the door triggers after getting in
             BLSideDoorTrigger.interactable = Time.realtimeSinceStartup - timeSinceSpringingDriverSeat > 1.6f;
             BRSideDoorTrigger.interactable = Time.realtimeSinceStartup - timeSinceSpringingDriverSeat > 1.6f;
+
+            // Dash display if car battery is on
+            screensContainer.SetActive(keyIsInIgnition);
+
+            // Time on dash
+            if (keyIsInIgnition)
+            {
+                dotMatrix.text = HUDManager.Instance.clockNumber.text.Trim().Replace("\n", " ");
+            }
         }
 
         // Kill backseat players if the car explodes
