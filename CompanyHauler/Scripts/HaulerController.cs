@@ -2,6 +2,7 @@
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UIElements.Experimental;
 
 namespace CompanyHauler.Scripts
 {
@@ -46,6 +47,16 @@ namespace CompanyHauler.Scripts
         public GameObject screensContainer;
 
         public TextMeshProUGUI dotMatrix;
+
+        public GameObject leftDial;
+
+        public GameObject rightDial;
+
+        public Transform leftDialTransform;
+        
+        public Transform rightDialTransform;
+
+        public GameObject checkEngineLight;
 
         // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -220,6 +231,16 @@ namespace CompanyHauler.Scripts
             {
                 dotMatrix.text = HUDManager.Instance.clockNumber.text.Trim().Replace("\n", " ");
             }
+        }
+
+        // Additional things to do on late update
+        public new void LateUpdate()
+        {
+            base.LateUpdate();
+
+            // Gauges
+            leftDialTransform.SetLocalEulerAngles(new Vector3(Mathf.Lerp(EngineRPM / MaxEngineRPM, -219.2f, -174.4f), 90f, 90f), RotationOrder.OrderXYZ);
+            rightDialTransform.SetLocalEulerAngles(new Vector3(Mathf.Lerp(mainRigidbody.GetPointVelocity(Vector3.zero).magnitude / carMaxSpeed, 11f, -25.6f), 270f, -90f), RotationOrder.OrderXYZ);
         }
 
         // Kill backseat players if the car explodes
