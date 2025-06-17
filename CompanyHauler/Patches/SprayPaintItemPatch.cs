@@ -27,6 +27,8 @@ public static class TrySprayingWeedKillerBottlePatch
         matcher.Advance(4); // move from Ldloc_1 (start) to the 5th instruction matched
         var branchInstr = matcher.Instruction;
 
+        //Debug.Log($"Found instruction: {branchInstr.opcode}, Operand: {branchInstr.operand}");
+
         // Ensure it's a branch with a valid label
         if (!(matcher.Instruction.operand is Label ogBranchTarget))
         {

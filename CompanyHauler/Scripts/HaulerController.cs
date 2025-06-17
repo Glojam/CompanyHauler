@@ -30,6 +30,14 @@ namespace CompanyHauler.Scripts
 
         public InteractTrigger BRSideDoorTrigger;
 
+        public AudioClip chimeSound;
+
+        public AudioSource ChimeAudio;
+
+        public bool doorChimeDebounce = false;
+
+        public bool cablightToggle = false;
+
         // BACK-LEFT PASSENGER METHODS //////////////////////////
 
         public void OnBLExit()
@@ -248,6 +256,29 @@ namespace CompanyHauler.Scripts
 
         // Hauler can't boost
         public new void AddTurboBoost() {}
+
+        // Methods below to add door chime
+        public new void StartTryCarIgnition()
+        {
+            if (!doorChimeDebounce)
+            {
+                ChimeAudio.PlayOneShot(chimeSound);
+                doorChimeDebounce = true;
+            }
+            base.StartTryCarIgnition();
+        }
+        public new void RemoveKeyFromIgnition()
+        {
+            doorChimeDebounce = false;
+            base.RemoveKeyFromIgnition();
+        }
+
+        // Toggle cabin light button
+        public void CabinLightToggle()
+        {
+            cablightToggle = !cablightToggle;
+            SetFrontCabinLightOn(cablightToggle);
+        }
 
     }
 }
