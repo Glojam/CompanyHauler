@@ -1,7 +1,9 @@
-﻿using GameNetcodeStuff;
+﻿using System.Linq.Expressions;
+using GameNetcodeStuff;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.UIElements.Experimental;
 
 namespace CompanyHauler.Scripts
@@ -34,6 +36,8 @@ namespace CompanyHauler.Scripts
 
         public AudioClip chimeSound;
 
+        public AudioClip chimeSoundCritical;
+
         public AudioSource ChimeAudio;
 
         public bool doorChimeDebounce = false;
@@ -48,15 +52,27 @@ namespace CompanyHauler.Scripts
 
         public TextMeshProUGUI dotMatrix;
 
-        public GameObject leftDial;
+        public MeshRenderer leftDial;
 
-        public GameObject rightDial;
+        public MeshRenderer rightDial;
 
         public Transform leftDialTransform;
         
         public Transform rightDialTransform;
 
         public GameObject checkEngineLight;
+
+        public Material dialOnMat;
+
+        public Material dialOffMat;
+
+        public Image leftDialTickmarks;
+        
+        public Image rightDialTickmarks;
+
+        private bool lastKeyInIgnition = false;
+
+        private bool checkEngineWasAlarmed = false;
 
         // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -218,31 +234,64 @@ namespace CompanyHauler.Scripts
         public new void Update()
         {
             base.Update();
+            if (carDestroyed) { return; }
+            if (destroyNextFrame) { return; }
 
             // Re-enable the door triggers after getting in
             BLSideDoorTrigger.interactable = Time.realtimeSinceStartup - timeSinceSpringingDriverSeat > 1.6f;
             BRSideDoorTrigger.interactable = Time.realtimeSinceStartup - timeSinceSpringingDriverSeat > 1.6f;
 
-            // Dash display if car battery is on
-            screensContainer.SetActive(keyIsInIgnition);
+            // Event when key is added/removed (battery is on)
+            if (lastKeyInIgnition != keyIsInIgnition)
+            {
+                setDashDials();
+                lastKeyInIgnition = keyIsInIgnition;
+            }
+
+            // Check engine light
+            if ((float)carHP/baseCarHP < 0.5f && !checkEngineWasAlarmed && keyIsInIgnition && !carDestroyed)
+            {
+                checkEngineWasAlarmed = true;
+                checkEngineLight.SetActive(true);
+                ChimeAudio.PlayOneShot(chimeSoundCritical);
+            }
+            else if ((float)carHP / baseCarHP > 0.5f && checkEngineWasAlarmed && !carDestroyed)
+            {
+                checkEngineWasAlarmed = false;
+                checkEngineLight.SetActive(false);
+            }
 
             // Time on dash
             if (keyIsInIgnition)
             {
                 dotMatrix.text = HUDManager.Instance.clockNumber.text.Trim().Replace("\n", " ");
             }
-        }
-
-        // Additional things to do on late update
-        public new void LateUpdate()
-        {
-            base.LateUpdate();
 
             // Gauges
-            leftDialTransform.SetLocalEulerAngles(new Vector3(Mathf.Lerp(EngineRPM / MaxEngineRPM, -219.2f, -174.4f), 90f, 90f), RotationOrder.OrderXYZ);
-            rightDialTransform.SetLocalEulerAngles(new Vector3(Mathf.Lerp(mainRigidbody.GetPointVelocity(Vector3.zero).magnitude / carMaxSpeed, 11f, -25.6f), 270f, -90f), RotationOrder.OrderXYZ);
+            if (FrontLeftWheel != null)
+            {
+                leftDialTransform.localEulerAngles = new Vector3(Mathf.Lerp(-219f, -10f, Mathf.Abs(EngineRPM) / (MaxEngineRPM / 2.5f)) + (ignitionStarted ? 25f : 0f), 90f, 90f);
+                rightDialTransform.localEulerAngles = new Vector3(Mathf.Lerp(11f, -203f, Mathf.Abs(FrontLeftWheel.rotationSpeed) / 5000f), 270f, -90f);
+            }
         }
 
+        // Additional things to do on start
+        public new void Start()
+        {
+            base.Start();
+            setDashDials();
+            checkEngineLight.SetActive(false);
+        }
+
+        public void setDashDials()
+        {
+            screensContainer.SetActive(keyIsInIgnition);
+            leftDial.materials = keyIsInIgnition ? [dialOnMat] : [dialOffMat];
+            rightDial.materials = keyIsInIgnition ? [dialOnMat] : [dialOffMat];
+            leftDialTickmarks.color = keyIsInIgnition ? new Color(0.84f, 0.84f, 0.84f) : new Color(0.37f, 0.37f, 0.37f);
+            rightDialTickmarks.color = keyIsInIgnition ? new Color(0.84f, 0.84f, 0.84f) : new Color(0.37f, 0.37f, 0.37f);
+        }
+        
         // Kill backseat players if the car explodes
         public new void DestroyCar()
         {
@@ -314,6 +363,7 @@ namespace CompanyHauler.Scripts
             base.RemoveKeyFromIgnition();
         }
 
+        // Cabin light
         public void CabinLightToggle()
         {
             SetFrontCabinLightOn(!cablightToggle);
