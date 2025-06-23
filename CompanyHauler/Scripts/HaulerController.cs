@@ -1,4 +1,5 @@
-﻿using GameNetcodeStuff;
+﻿using BepInEx.Logging;
+using GameNetcodeStuff;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -76,6 +77,14 @@ public class HaulerController : VehicleController
 
     private bool tractionLightWasAlarmed = false;
 
+    public AnimationClip cruiserGearShiftClip;
+
+    public AnimationClip haulerColumnShiftClip;
+
+    private RuntimeAnimatorController originalController = null!;
+
+    private AnimatorOverrideController overrideController = null!;
+
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
     public void OnBLExit()
@@ -134,6 +143,7 @@ public class HaulerController : VehicleController
         if (player == GameNetworkManager.Instance.localPlayerController)
         {
             localPlayerInBLSeat = true;
+            SetVehicleCollisionForPlayer(false, player);
         }
         else
         {
@@ -201,6 +211,7 @@ public class HaulerController : VehicleController
         if (player == GameNetworkManager.Instance.localPlayerController)
         {
             localPlayerInBRSeat = true;
+            SetVehicleCollisionForPlayer(false, player);
         }
         else
         {
@@ -211,12 +222,10 @@ public class HaulerController : VehicleController
     }
 
     // The 2 below methods disable collisions for passengers that enter
-    // Interestingly, this is an oversight for the Cruiser passenger
 
     [ServerRpc(RequireOwnership = false)]
     public void SetVehicleCollisionForPlayerServerRPC(bool setEnabled)
     {
-        SetVehicleCollisionForPlayer(setEnabled: setEnabled, GameNetworkManager.Instance.localPlayerController);
         SetVehicleCollisionForPlayerClientRPC(setEnabled);
     }
 
@@ -234,7 +243,7 @@ public class HaulerController : VehicleController
     }
 
     // ADDITIONAL METHODS //////////////////////////
-
+    
     public int CanExitBackSeats(bool isLeftSeat)
     {
         Transform[] exitPointList = isLeftSeat ? BL_ExitPoints : BR_ExitPoints;
@@ -408,5 +417,23 @@ public class HaulerController : VehicleController
     public void CabinLightToggle()
     {
         SetFrontCabinLightOn(!cablightToggle);
+    }
+
+    // Animation overrides for the gear shifter
+    public void ReplaceGearshiftAnim()
+    {
+        originalController = currentDriver.playerBodyAnimator.runtimeAnimatorController;
+        overrideController = new AnimatorOverrideController(originalController);
+        overrideController[cruiserGearShiftClip] = haulerColumnShiftClip;
+        currentDriver.playerBodyAnimator.runtimeAnimatorController = overrideController;
+        CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
+    }
+
+    public void ReturnGearshiftAnim()
+    {
+        currentDriver.playerBodyAnimator.runtimeAnimatorController = originalController;
+        // Below is a very stupid hack used to prevent the sitting animation from not looping
+        currentDriver.playerBodyAnimator.SetBool("SA_Truck", true);
+        CompanyHauler.Logger.LogDebug("Reverted to the original gearshift animation clip.");
     }
 }

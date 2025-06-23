@@ -37,3 +37,31 @@ public static class SetIgnitionPatch
         }
     }
 }
+
+// Custom gearshift anim replacement (add override)
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.TakeControlOfVehicle))]
+public static class TakeControlOfVehiclePatch
+{
+    static void Postfix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            hauler.ReplaceGearshiftAnim();
+        }
+    }
+}
+
+// Custom gearshift anim replacement (undo override)
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.LoseControlOfVehicle))]
+public static class LoseControlOfVehiclePatch
+{
+    static void Prefix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            hauler.ReturnGearshiftAnim();
+        }
+    }
+}
