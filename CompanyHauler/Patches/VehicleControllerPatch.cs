@@ -1,4 +1,7 @@
-﻿using CompanyHauler.Scripts;
+﻿using System.Collections.Generic;
+using System.Reflection.Emit;
+using CompanyHauler.Scripts;
+using GameNetcodeStuff;
 using HarmonyLib;
 using UnityEngine;
 
@@ -65,3 +68,47 @@ public static class LoseControlOfVehiclePatch
         }
     }
 }
+
+// Transpiler that allows Hauler drivers' animator to play the column shifter clip even if loking forward
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.Update))]
+public static class VehicleControllerUpdatePatch
+{
+    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+    {
+        var matcher = new CodeMatcher(instructions, generator).Start();
+
+        matcher.MatchForward(false,
+            new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(GameNetworkManager), "get_Instance")),
+            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(GameNetworkManager), "localPlayerController")),
+            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(PlayerControllerB), "ladderCameraHorizontal")),
+            new CodeMatch(OpCodes.Ldc_R4, 52f),
+            new CodeMatch(ins => ins.opcode == OpCodes.Ble_Un || ins.opcode == OpCodes.Blt_Un_S)
+        );
+
+        if (!matcher.IsValid)
+        {
+            CompanyHauler.Logger.LogDebug("Matching is not valid. Transpilation failed.");
+            return instructions;
+        }
+
+        matcher.Advance(5); // move to instruction after the branch
+
+        // Create a label to mark the start of the IF body
+        Label ifBodyStartLabel = generator.DefineLabel();
+        matcher.SetInstruction(matcher.Instruction.WithLabels(ifBodyStartLabel));
+
+        // Do skipping logic before the matched code
+        matcher.Advance(-5);
+
+        matcher.Insert(
+            new CodeInstruction(OpCodes.Ldarg_0),
+            new CodeInstruction(OpCodes.Isinst, typeof(HaulerController)),
+            new CodeInstruction(OpCodes.Brtrue_S, ifBodyStartLabel) // If HaulerController, go directly to if-body
+        );
+
+        return matcher.InstructionEnumeration();
+    }
+}
+
+

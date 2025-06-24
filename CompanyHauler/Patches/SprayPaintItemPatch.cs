@@ -26,15 +26,12 @@ public static class TrySprayingWeedKillerBottlePatch
 
         // Move to the branch instruction (which is the last match)
         matcher.Advance(4); // move from Ldloc_1 (start) to the 5th instruction matched
-        var branchInstr = matcher.Instruction;
-
-        //Debug.Log($"Found instruction: {branchInstr.opcode}, Operand: {branchInstr.operand}");
 
         // Ensure it's a branch with a valid label
-        if (!(matcher.Instruction.operand is Label ogBranchTarget))
+        if (matcher.Instruction.operand is not Label ogBranchTarget)
         {
-            Debug.Log(matcher.Instruction.operand.ToString());
-            throw new System.Exception("Expected a branch label but found null or incorrect type.");
+            CompanyHauler.Logger.LogDebug(matcher.Instruction.operand.ToString() + "; transpilation failed for SprayPaintItemPatch");
+            return matcher.InstructionEnumeration();
         }
 
         // Replace the comparison: if ((carHP >= baseCarHP) && (vehicleVontroller as HaulerController == null))

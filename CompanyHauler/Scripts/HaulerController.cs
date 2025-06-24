@@ -81,6 +81,10 @@ public class HaulerController : VehicleController
 
     public AnimationClip haulerColumnShiftClip;
 
+    public AnimationClip cruiserGearShiftIdleClip;
+
+    public AnimationClip cruiserSteeringClip;
+
     private RuntimeAnimatorController originalController = null!;
 
     private AnimatorOverrideController overrideController = null!;
@@ -425,6 +429,7 @@ public class HaulerController : VehicleController
         originalController = currentDriver.playerBodyAnimator.runtimeAnimatorController;
         overrideController = new AnimatorOverrideController(originalController);
         overrideController[cruiserGearShiftClip] = haulerColumnShiftClip;
+        overrideController[cruiserGearShiftIdleClip] = cruiserSteeringClip;
         currentDriver.playerBodyAnimator.runtimeAnimatorController = overrideController;
         CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
     }
