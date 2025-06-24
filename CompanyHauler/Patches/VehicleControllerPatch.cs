@@ -69,6 +69,25 @@ public static class LoseControlOfVehiclePatch
     }
 }
 
+// Set the headlight material for the two other LOD meshes
+// This is a base game oversight. I could easily patch this on Cruiser here, but this is not a cruiser improvements mod.
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.SetHeadlightMaterial))]
+public static class SetHeadlightMaterialPatch
+{
+    static void Postfix(bool on, VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            Material material = ((!on) ? hauler.headlightsOffMat : hauler.headlightsOnMat);
+            Material[] sharedMaterials = hauler.mainBodyMesh.sharedMaterials;
+            sharedMaterials[1] = material;
+            hauler.lod1Mesh.sharedMaterials = sharedMaterials;
+            hauler.lod2Mesh.sharedMaterials = sharedMaterials;
+        }
+    }
+}
+
 // Transpiler that allows Hauler drivers' animator to play the column shifter clip even if loking forward
 [HarmonyPatch(typeof(VehicleController))]
 [HarmonyPatch(nameof(VehicleController.Update))]
@@ -110,5 +129,3 @@ public static class VehicleControllerUpdatePatch
         return matcher.InstructionEnumeration();
     }
 }
-
-
