@@ -35,8 +35,7 @@ public static class SetIgnitionPatch
         HaulerController? hauler = __instance as HaulerController;
         if (hauler != null && started && started != __instance.ignitionStarted)
         {
-            hauler.ChimeAudio.Stop();
-            hauler.ChimeAudio.PlayOneShot(hauler.chimeSound);
+            hauler.ChimeAudio.Play();
         }
     }
 }
@@ -50,7 +49,7 @@ public static class TakeControlOfVehiclePatch
     {
         if (__instance is HaulerController hauler)
         {
-            hauler.ReplaceGearshiftAnim();
+            hauler.ReplaceGearshiftAnimLocalClient();
         }
     }
 }
@@ -64,7 +63,7 @@ public static class LoseControlOfVehiclePatch
     {
         if (__instance is HaulerController hauler)
         {
-            hauler.ReturnGearshiftAnim();
+            hauler.ReturnGearshiftAnimLocalClient();
         }
     }
 }

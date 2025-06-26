@@ -1,5 +1,4 @@
-﻿using BepInEx.Logging;
-using GameNetcodeStuff;
+﻿using GameNetcodeStuff;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -88,6 +87,36 @@ public class HaulerController : VehicleController
     private RuntimeAnimatorController originalController = null!;
 
     private AnimatorOverrideController overrideController = null!;
+
+    public AnimationClip cruiserKeyInsertClip;
+
+    public AnimationClip cruiserKeyInsertAgainClip;
+
+    public AnimationClip cruiserKeyRemoveClip;
+
+    public AnimationClip cruiserKeyUntwistClip;
+
+    public AnimationClip haulerKeyInsertClip;
+
+    public AnimationClip haulerKeyInsertAgainClip;
+
+    public AnimationClip haulerKeyRemoveClip;
+
+    public AnimationClip haulerKeyUntwistClip;
+
+    public AudioClip TrainHornAudioClip;
+
+    public AudioSource TrainHornAudio;
+
+    public AudioSource TrainHornAudioDistant;
+
+    private float superHornCooldownTime;
+
+    public float superHornCooldownAmount;
+
+    public InteractTrigger redButtonTrigger;
+
+    public AudioSource roofRainAudio;
 
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -277,7 +306,18 @@ public class HaulerController : VehicleController
         if (carDestroyed) { return; }
         if (destroyNextFrame) { return; }
 
-        // Re-enable the door triggers after getting in
+        if (!redButtonTrigger.interactable)
+        {
+            if (superHornCooldownTime <= 0f)
+            {
+                redButtonTrigger.interactable = true;
+                return;
+            }
+            redButtonTrigger.disabledHoverTip = $"[Recharging: {(int)superHornCooldownTime} sec.]";
+            superHornCooldownTime -= Time.deltaTime;
+        }
+
+        // Re-enable the rearside door triggers after getting in
         BLSideDoorTrigger.interactable = Time.realtimeSinceStartup - timeSinceSpringingDriverSeat > 1.6f;
         BRSideDoorTrigger.interactable = Time.realtimeSinceStartup - timeSinceSpringingDriverSeat > 1.6f;
 
@@ -301,8 +341,22 @@ public class HaulerController : VehicleController
             tractionControlLight.SetActive(false);
         }
 
+        bool raining =  TimeOfDay.Instance.currentLevelWeather == LevelWeatherType.Rainy ||
+                        TimeOfDay.Instance.currentLevelWeather == LevelWeatherType.Flooded ||
+                        TimeOfDay.Instance.currentLevelWeather == LevelWeatherType.Stormy;
+
+        // Roof rain
+        if (raining && !roofRainAudio.isPlaying) 
+        { 
+            roofRainAudio.Play();
+        }
+        else if (!raining && roofRainAudio.isPlaying)
+        {
+            roofRainAudio.Stop();
+        }
+
         // Check engine light
-        if ((float)carHP/baseCarHP < 0.5f && !checkEngineWasAlarmed && keyIsInIgnition)
+        if ((float)carHP / baseCarHP < 0.5f && !checkEngineWasAlarmed && keyIsInIgnition)
         {
             checkEngineWasAlarmed = true;
             checkEngineLight.SetActive(true);
@@ -335,6 +389,13 @@ public class HaulerController : VehicleController
         setDashDials();
         checkEngineLight.SetActive(false);
         tractionControlLight.SetActive(false);
+    }
+
+    public new void Awake()
+    {
+        base.Awake();
+        redButtonTrigger.interactable = false;
+        superHornCooldownTime = superHornCooldownAmount;
     }
 
     public void setDashDials()
@@ -423,22 +484,87 @@ public class HaulerController : VehicleController
         SetFrontCabinLightOn(!cablightToggle);
     }
 
-    // Animation overrides for the gear shifter
-    public void ReplaceGearshiftAnim()
+    public void ReplaceGearshiftAnimLocalClient()
     {
+        ReplaceGearshiftAnimServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void ReplaceGearshiftAnimServerRpc()
+    {
+        ReplaceGearshiftAnimClientRpc();
+    }
+
+    [ClientRpc]
+    // Animation overrides for the gear shifter
+    public void ReplaceGearshiftAnimClientRpc()
+    {
+        // Below is a very stupid hack used to prevent getting in cruiser to break hauler anims
+        currentDriver.playerBodyAnimator.SetBool("SA_JumpInCar", true);
+        CompanyHauler.Logger.LogDebug(currentDriver);
         originalController = currentDriver.playerBodyAnimator.runtimeAnimatorController;
         overrideController = new AnimatorOverrideController(originalController);
         overrideController[cruiserGearShiftClip] = haulerColumnShiftClip;
         overrideController[cruiserGearShiftIdleClip] = cruiserSteeringClip;
+        overrideController[cruiserKeyInsertClip] = haulerKeyInsertClip;
+        overrideController[cruiserKeyInsertAgainClip] = haulerKeyInsertAgainClip;
+        overrideController[cruiserKeyRemoveClip] = haulerKeyRemoveClip;
+        overrideController[cruiserKeyUntwistClip] = haulerKeyUntwistClip;
         currentDriver.playerBodyAnimator.runtimeAnimatorController = overrideController;
         CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
     }
 
-    public void ReturnGearshiftAnim()
+    public void ReturnGearshiftAnimLocalClient()
+    {
+        ReturnGearshiftAnimServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void ReturnGearshiftAnimServerRpc()
+    {
+        ReturnGearshiftAnimClientRpc();
+    }
+
+    [ClientRpc]
+    public void ReturnGearshiftAnimClientRpc()
     {
         currentDriver.playerBodyAnimator.runtimeAnimatorController = originalController;
         // Below is a very stupid hack used to prevent the sitting animation from not looping
         currentDriver.playerBodyAnimator.SetBool("SA_Truck", true);
+        // Below is a very stupid hack used to prevent several animations from not playing
+        currentDriver.playerBodyAnimator.SetBool("SA_JumpInCar", true);
         CompanyHauler.Logger.LogDebug("Reverted to the original gearshift animation clip.");
     }
+
+    public void TrainHornLocalClient()
+    {
+        TrainHornServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void TrainHornServerRpc()
+    {
+        TrainHornClientRpc();
+    }
+
+    [ClientRpc]
+    public void TrainHornClientRpc()
+    {
+        TrainHornAudio.Play();
+        TrainHornAudioDistant.Play();
+        superHornCooldownTime = superHornCooldownAmount;
+        redButtonTrigger.interactable = false;
+        WalkieTalkie.TransmitOneShotAudio(TrainHornAudio, TrainHornAudioClip);
+        // Alert the horde
+        for (int i = 0; i < 50; i++)
+        {
+            RoundManager.Instance.PlayAudibleNoise(base.transform.position, 950f, 10f, 0, false, 19027);
+        }
+        float distToPlayer = Vector3.Distance(GameNetworkManager.Instance.localPlayerController.transform.position, base.transform.position);
+        if (distToPlayer < 20f)
+        {
+            HUDManager.Instance.ShakeCamera(ScreenShakeType.Long);
+        }
+    }
+
 }

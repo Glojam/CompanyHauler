@@ -2,7 +2,6 @@ using CompanyHauler.Scripts;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using HarmonyLib;
-using UnityEngine;
 
 namespace CompanyHauler.Patches;
 
