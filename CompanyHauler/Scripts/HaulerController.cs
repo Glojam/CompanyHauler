@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using GameNetcodeStuff;
 using TMPro;
 using Unity.Netcode;
@@ -89,6 +90,12 @@ public class HaulerController : VehicleController
 
     private AnimatorOverrideController overrideController = null!;
 
+    private RuntimeAnimatorController originalController_pass = null!;
+
+    private AnimatorOverrideController overrideController_pass = null!;
+
+    private bool passReplaced;
+
     public AnimationClip cruiserKeyInsertClip;
 
     public AnimationClip cruiserKeyInsertAgainClip;
@@ -105,6 +112,8 @@ public class HaulerController : VehicleController
 
     public AnimationClip haulerKeyUntwistClip;
 
+    public AnimationClip haulerPassengerSitClip;
+
     public AudioClip TrainHornAudioClip;
 
     public AudioSource TrainHornAudio;
@@ -119,7 +128,7 @@ public class HaulerController : VehicleController
 
     public AudioSource roofRainAudio;
 
-    public List<GameObject> haulerObjectsToDestroy; 
+    public List<GameObject> haulerObjectsToDestroy;
 
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -539,6 +548,60 @@ public class HaulerController : VehicleController
         CompanyHauler.Logger.LogDebug("Reverted to the original gearshift animation clip.");
     }
 
+    public void ReplacePassengerAnimLocalClient()
+    {
+        int passenger = (int)GameNetworkManager.Instance.localPlayerController.playerClientId;
+        ReplacePassengerAnimServerRpc(passenger);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void ReplacePassengerAnimServerRpc(int passenger)
+    {
+        ReplacePassengerAnimClientRpc(passenger);
+    }
+
+    [ClientRpc]
+    public void ReplacePassengerAnimClientRpc(int passenger)
+    {
+        // SetPassengerInCar gets called twice for some reason, this is a debounce
+        // Possible downside: future passengers don't do cool animation if front seater died whilst sitting instead of exiting
+        if (passReplaced) { return; }
+        // Below is a very stupid hack used to prevent getting in cruiser to break hauler anims
+        PlayerControllerB passengerPlayer = StartOfRound.Instance.allPlayerScripts[passenger];
+        passengerPlayer.playerBodyAnimator.SetBool("SA_JumpInCar", true);
+        originalController_pass = passengerPlayer.playerBodyAnimator.runtimeAnimatorController;
+        overrideController_pass = new AnimatorOverrideController(originalController_pass);
+        overrideController_pass["SitAndSteerNoHands"] = haulerPassengerSitClip;
+        passengerPlayer.playerBodyAnimator.runtimeAnimatorController = overrideController_pass;
+        CompanyHauler.Logger.LogDebug("Replaced passenger animation clip.");
+        passReplaced = true;
+    }
+
+    public void ReturnPassengerAnimLocalClient()
+    {
+        int passenger = (int)GameNetworkManager.Instance.localPlayerController.playerClientId;
+        ReturnPassengerAnimServerRpc(passenger);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void ReturnPassengerAnimServerRpc(int passenger)
+    {
+        ReturnPassengerAnimClientRpc(passenger);
+    }
+
+    [ClientRpc]
+    public void ReturnPassengerAnimClientRpc(int passenger)
+    {
+        PlayerControllerB passengerPlayer = StartOfRound.Instance.allPlayerScripts[passenger];
+        passengerPlayer.playerBodyAnimator.runtimeAnimatorController = originalController_pass;
+        // Below is a very stupid hack used to prevent the sitting animation from not looping
+        passengerPlayer.playerBodyAnimator.SetBool("SA_Truck", true);
+        // Below is a very stupid hack used to prevent several animations from not playing
+        passengerPlayer.playerBodyAnimator.SetBool("SA_JumpInCar", true);
+        CompanyHauler.Logger.LogDebug("Reverted to the original passenger animation clip.");
+        passReplaced = false;
+    }
+
     public void TrainHornLocalClient()
     {
         TrainHornServerRpc();
@@ -558,15 +621,21 @@ public class HaulerController : VehicleController
         superHornCooldownTime = superHornCooldownAmount;
         redButtonTrigger.interactable = false;
         WalkieTalkie.TransmitOneShotAudio(TrainHornAudio, TrainHornAudioClip);
-        // Alert the horde
-        for (int i = 0; i < 50; i++)
-        {
-            RoundManager.Instance.PlayAudibleNoise(base.transform.position, 950f, 10f, 0, false, 19027);
-        }
         float distToPlayer = Vector3.Distance(GameNetworkManager.Instance.localPlayerController.transform.position, base.transform.position);
         if (distToPlayer < 20f)
         {
-            HUDManager.Instance.ShakeCamera(ScreenShakeType.Long);
+            HUDManager.Instance.ShakeCamera(ScreenShakeType.VeryStrong);
+        }
+        // Alert the horde
+        StartCoroutine(AlertHorde());
+    }
+
+    public IEnumerator AlertHorde()
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            RoundManager.Instance.PlayAudibleNoise(base.transform.position, 1050f, 1050f, 0, false, 19027);
+            yield return new WaitForSeconds(0.1f);
         }
     }
 

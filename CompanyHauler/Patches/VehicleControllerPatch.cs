@@ -68,6 +68,34 @@ public static class LoseControlOfVehiclePatch
     }
 }
 
+// Custom passenger sit anim replacement (add override)
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.SetPassengerInCar))]
+public static class SetPassengerInCarPatch
+{
+    static void Postfix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            hauler.ReplacePassengerAnimLocalClient();
+        }
+    }
+}
+
+// Custom passenger sit anim replacement (undo override)
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.OnPassengerExit))]
+public static class OnPassengerExitPatch
+{
+    static void Prefix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            hauler.ReturnPassengerAnimLocalClient();
+        }
+    }
+}
+
 // Set the headlight material for the two other LOD meshes
 // This is a base game oversight. I could easily patch this on Cruiser here, but this is not a cruiser improvements mod.
 [HarmonyPatch(typeof(VehicleController))]
