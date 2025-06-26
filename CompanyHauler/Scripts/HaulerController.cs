@@ -1,4 +1,5 @@
-﻿using GameNetcodeStuff;
+﻿using System.Collections.Generic;
+using GameNetcodeStuff;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -117,6 +118,8 @@ public class HaulerController : VehicleController
     public InteractTrigger redButtonTrigger;
 
     public AudioSource roofRainAudio;
+
+    public List<GameObject> haulerObjectsToDestroy; 
 
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -509,7 +512,7 @@ public class HaulerController : VehicleController
         overrideController["Key_Insert"] = haulerKeyInsertClip;
         overrideController["Key_InsertAgain"] = haulerKeyInsertAgainClip;
         overrideController["Key_Remove"] = haulerKeyRemoveClip;
-        overrideController["Key_Untwistr"] = haulerKeyUntwistClip;
+        overrideController["Key_Untwist"] = haulerKeyUntwistClip;
         currentDriver.playerBodyAnimator.runtimeAnimatorController = overrideController;
         CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
     }

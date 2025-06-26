@@ -87,6 +87,20 @@ public static class SetHeadlightMaterialPatch
     }
 }
 
+// Custom gearshift anim replacement (undo override)
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.DestroyCar))]
+public static class DestroyCarPatch
+{
+    static void Postfix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            foreach (GameObject rip in hauler.haulerObjectsToDestroy) { rip.SetActive(false); }
+        }
+    }
+}
+
 // Transpiler that allows Hauler drivers' animator to play the column shifter clip even if loking forward
 [HarmonyPatch(typeof(VehicleController))]
 [HarmonyPatch(nameof(VehicleController.Update))]
