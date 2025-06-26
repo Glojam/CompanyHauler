@@ -504,12 +504,12 @@ public class HaulerController : VehicleController
         CompanyHauler.Logger.LogDebug(currentDriver);
         originalController = currentDriver.playerBodyAnimator.runtimeAnimatorController;
         overrideController = new AnimatorOverrideController(originalController);
-        overrideController[cruiserGearShiftClip] = haulerColumnShiftClip;
-        overrideController[cruiserGearShiftIdleClip] = cruiserSteeringClip;
-        overrideController[cruiserKeyInsertClip] = haulerKeyInsertClip;
-        overrideController[cruiserKeyInsertAgainClip] = haulerKeyInsertAgainClip;
-        overrideController[cruiserKeyRemoveClip] = haulerKeyRemoveClip;
-        overrideController[cruiserKeyUntwistClip] = haulerKeyUntwistClip;
+        overrideController["PullGearstick"] = haulerColumnShiftClip;
+        overrideController["SitAndSteerRightHandOnGearstick"] = cruiserSteeringClip;
+        overrideController["Key_Insert"] = haulerKeyInsertClip;
+        overrideController["Key_InsertAgain"] = haulerKeyInsertAgainClip;
+        overrideController["Key_Remove"] = haulerKeyRemoveClip;
+        overrideController["Key_Untwistr"] = haulerKeyUntwistClip;
         currentDriver.playerBodyAnimator.runtimeAnimatorController = overrideController;
         CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
     }
