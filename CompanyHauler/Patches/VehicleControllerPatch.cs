@@ -106,11 +106,16 @@ public static class SetHeadlightMaterialPatch
     {
         if (__instance is HaulerController hauler)
         {
-            Material material = ((!on) ? hauler.headlightsOffMat : hauler.headlightsOnMat);
-            Material[] sharedMaterials = hauler.mainBodyMesh.sharedMaterials;
-            sharedMaterials[1] = material;
-            hauler.lod1Mesh.sharedMaterials = sharedMaterials;
-            hauler.lod2Mesh.sharedMaterials = sharedMaterials;
+            //Material material = ((!on) ? hauler.headlightsOffMat : hauler.headlightsOnMat);
+            //Material[] sharedMaterials = hauler.mainBodyMesh.sharedMaterials;
+            //sharedMaterials[1] = material;
+           // hauler.lod1Mesh.sharedMaterials = sharedMaterials;
+           // hauler.lod2Mesh.sharedMaterials = sharedMaterials;
+
+            Material[] materials = hauler.mainBodyMesh.materials;
+            materials[1] = on ? hauler.headlightsOnMat : hauler.headlightsOffMat;
+            hauler.lod1Mesh.materials = materials;
+            hauler.lod2Mesh.materials = materials;
         }
     }
 }
