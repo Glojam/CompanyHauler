@@ -11,6 +11,7 @@ Speaking of which, this should be compatible with all vehicle mods that also use
 * Vanilla-style design
 * Enclosed roof - protects against forest giants
 * Working tacometer, speedometer, and warning lights
+* Side mirrors
 * Neat interactables like automatic windows, a sunroof, and a tailgate!
 * More than **2x** the health of the Cruiser, *at the expense of having no boost*
 * **6** radio songs
@@ -28,6 +29,8 @@ Speaking of which, this should be compatible with all vehicle mods that also use
 * Compatibility with various cruiser improvement mods is TBD
 
 ## Credits
+3D modelling and programming by me!
+
 ### Radio music
 All of the radio music is available from the public domain, thanks to the Internet Archive:
 https://archive.org/details/78rpmCollection1920s1930sPopularMusic
