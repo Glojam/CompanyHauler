@@ -10,7 +10,7 @@ Speaking of which, this should be compatible with all vehicle mods that also use
 * Four seats
 * Vanilla-style design
 * Enclosed roof - protects against forest giants
-* Working tacometer, speedometer, and warning lights
+* Working tachometer, speedometer, and warning lights
 * Side mirrors
 * Neat interactables like automatic windows, a sunroof, and a tailgate!
 * More than **2x** the health of the Cruiser, *at the expense of having no boost*
