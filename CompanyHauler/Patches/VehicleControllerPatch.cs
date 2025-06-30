@@ -3,6 +3,7 @@ using System.Reflection.Emit;
 using CompanyHauler.Scripts;
 using GameNetcodeStuff;
 using HarmonyLib;
+using Unity.Services.Authentication.Generated;
 using UnityEngine;
 
 namespace CompanyHauler.Patches;
@@ -40,6 +41,35 @@ public static class SetIgnitionPatch
     }
 }
 
+// Prevent the driver from disabling collision to unseated players, which is a problem for the Hauler
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.DisableVehicleCollisionForAllPlayers))]
+public static class DisableVehicleCollisionForAllPlayersPatch
+{
+    static bool Prefix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler) {
+            return false; 
+        }
+        return true;
+    }
+}
+
+// Prevent the driver from enabling collision to seated players, which is a problem for the Hauler
+[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch(nameof(VehicleController.EnableVehicleCollisionForAllPlayers))]
+public static class EnableVehicleCollisionForAllPlayersPatch
+{
+    static bool Prefix(VehicleController __instance)
+    {
+        if (__instance is HaulerController hauler)
+        {
+            return false;
+        }
+        return true;
+    }
+}
+
 // Custom gearshift anim replacement (add override)
 [HarmonyPatch(typeof(VehicleController))]
 [HarmonyPatch(nameof(VehicleController.TakeControlOfVehicle))]
@@ -54,7 +84,7 @@ public static class TakeControlOfVehiclePatch
     }
 }
 
-// Custom gearshift anim replacement (undo override)
+// Driver-only collision change + Custom gearshift anim replacement (undo override)
 [HarmonyPatch(typeof(VehicleController))]
 [HarmonyPatch(nameof(VehicleController.LoseControlOfVehicle))]
 public static class LoseControlOfVehiclePatch
@@ -63,6 +93,10 @@ public static class LoseControlOfVehiclePatch
     {
         if (__instance is HaulerController hauler)
         {
+            if (!(hauler.currentDriver != GameNetworkManager.Instance.localPlayerController))
+            {
+                hauler.SetVehicleCollisionForPlayer(setEnabled: true, GameNetworkManager.Instance.localPlayerController);
+            }
             hauler.ReturnGearshiftAnimLocalClient();
         }
     }
@@ -77,7 +111,7 @@ public static class SetPassengerInCarPatch
     {
         if (__instance is HaulerController hauler)
         {
-            hauler.ReplacePassengerAnimLocalClient();
+            //hauler.ReplacePassengerAnimLocalClient(); // TODO feature
         }
     }
 }
@@ -91,7 +125,7 @@ public static class OnPassengerExitPatch
     {
         if (__instance is HaulerController hauler)
         {
-            hauler.ReturnPassengerAnimLocalClient();
+            //hauler.ReturnPassengerAnimLocalClient(); // TODO feature
         }
     }
 }
@@ -167,8 +201,8 @@ public static class VehicleControllerUpdatePatch
         matcher.Advance(-5);
 
         matcher.Insert(
-            new CodeInstruction(OpCodes.Ldarg_0),
-            new CodeInstruction(OpCodes.Isinst, typeof(HaulerController)),
+            new CodeInstruction(OpCodes.Ldarg_0), // Ldarg_0 is "this" in a non-static context
+            new CodeInstruction(OpCodes.Isinst, typeof(HaulerController)), // Is this == Hauler?
             new CodeInstruction(OpCodes.Brtrue_S, ifBodyStartLabel) // If HaulerController, go directly to if-body
         );
 

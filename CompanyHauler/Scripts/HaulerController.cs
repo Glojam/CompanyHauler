@@ -42,7 +42,9 @@ public class HaulerController : VehicleController
 
     public bool doorChimeDebounce = false;
 
-    public bool cablightToggle = false;
+    public bool cablightToggle = false; // bad
+
+    private bool cabinLightBoolean = false;
 
     public Material cabinLightOnMat;
 
@@ -188,14 +190,16 @@ public class HaulerController : VehicleController
         if (player == GameNetworkManager.Instance.localPlayerController)
         {
             localPlayerInBLSeat = true;
-            SetVehicleCollisionForPlayer(false, player);
+            //SetVehicleCollisionForPlayer(false, player);
+            int passengerId = (int)player.playerClientId;
+            SetVehicleCollisionForPlayerServerRPC(false, passengerId);
         }
         else
         {
             BLSeatTrigger.interactable = false;
         }
         currentBL = player;
-        SetVehicleCollisionForPlayerServerRPC(false);
+
     }
 
     // BACK-RIGHT PASSENGER METHODS //////////////////////////
@@ -250,41 +254,49 @@ public class HaulerController : VehicleController
     public void SetBRPassengerInCar(PlayerControllerB player)
     {
         if (BRSideDoor.boolValue)
+        if (BRSideDoor.boolValue)
         {
             BRSideDoor.SetBoolOnClientOnly(setTo: false);
         }
         if (player == GameNetworkManager.Instance.localPlayerController)
         {
             localPlayerInBRSeat = true;
-            SetVehicleCollisionForPlayer(false, player);
+            //SetVehicleCollisionForPlayer(false, player);
+            int passengerId = (int)player.playerClientId;
+            SetVehicleCollisionForPlayerServerRPC(false, passengerId);
         }
         else
         {
             BRSeatTrigger.interactable = false;
         }
         currentBR = player;
-        SetVehicleCollisionForPlayerServerRPC(false);
     }
 
     // The 2 below methods disable collisions for passengers that enter
 
     [ServerRpc(RequireOwnership = false)]
-    public void SetVehicleCollisionForPlayerServerRPC(bool setEnabled)
+    public void SetVehicleCollisionForPlayerServerRPC(bool setEnabled, int passengerId)
     {
-        SetVehicleCollisionForPlayerClientRPC(setEnabled);
+        SetVehicleCollisionForPlayerClientRPC(setEnabled, passengerId);
     }
 
     [ClientRpc]
-    public void SetVehicleCollisionForPlayerClientRPC(bool setEnabled)
+    public void SetVehicleCollisionForPlayerClientRPC(bool setEnabled, int passengerId)
     {
-        SetVehicleCollisionForPlayer(setEnabled: setEnabled, GameNetworkManager.Instance.localPlayerController);
+        PlayerControllerB passengerPlayer = StartOfRound.Instance.allPlayerScripts[passengerId];
+        SetVehicleCollisionForPlayer(setEnabled: setEnabled, passengerPlayer);
     }
 
-    // Interestingly, this is an oversight for the Cruiser passenger, so I fixed it for the Hauler at least
+    // Interestingly, this is an oversight for the Cruiser passenger, which needs to be fixed for the Hauler
     public new void SetPassengerInCar(PlayerControllerB player)
     {
         base.SetPassengerInCar(player);
-        SetVehicleCollisionForPlayerServerRPC(false);
+        if (player == GameNetworkManager.Instance.localPlayerController)
+        {
+            //localPlayerInPassengerSeat = true;
+            int passengerId = (int)player.playerClientId;
+            SetVehicleCollisionForPlayerServerRPC(false, passengerId);
+        }
     }
 
     // ADDITIONAL METHODS //////////////////////////
@@ -341,13 +353,12 @@ public class HaulerController : VehicleController
         }
 
         // Traction control light
-        bool slipping = (FrontLeftWheel.motorTorque > 900f && FrontRightWheel.motorTorque > 900f);
-        if (slipping && !tractionLightWasAlarmed && keyIsInIgnition)
+        if (tireSparks.isEmitting && !tractionLightWasAlarmed && keyIsInIgnition)
         {
             tractionLightWasAlarmed = true;
             tractionControlLight.SetActive(true);
         }
-        else if (!slipping && tractionLightWasAlarmed)
+        else if (!tireSparks.isEmitting && tractionLightWasAlarmed)
         {
             tractionLightWasAlarmed = false;
             tractionControlLight.SetActive(false);
@@ -445,7 +456,7 @@ public class HaulerController : VehicleController
         localPlayerInPassengerSeat = prevIsPassenger;
     }
 
-    // ??
+    // ?? not sure, just added to be consistemt
     public new void OnDisable()
     {
         bool isInBackRow = localPlayerInBLSeat || localPlayerInBRSeat;
@@ -477,44 +488,81 @@ public class HaulerController : VehicleController
     // Methods below to add door chime
     public new void StartTryCarIgnition()
     {
+        TryChimeSoundServerRpc();
+        base.StartTryCarIgnition();
+    }
+    public new void RemoveKeyFromIgnition()
+    {
+        EndDoorChimeDebounceServerRpc();
+        base.RemoveKeyFromIgnition();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void TryChimeSoundServerRpc()
+    {
+        TryChimeSoundClientRpc();
+    }
+    [ClientRpc]
+    public void TryChimeSoundClientRpc()
+    {
         if (!doorChimeDebounce)
         {
             ChimeAudio.PlayOneShot(chimeSound);
             doorChimeDebounce = true;
         }
-        base.StartTryCarIgnition();
     }
-    public new void RemoveKeyFromIgnition()
+    [ServerRpc(RequireOwnership = false)]
+    public void EndDoorChimeDebounceServerRpc()
+    {
+        EndDoorChimeDebounceClientRpc();
+    }
+    [ClientRpc]
+    public void EndDoorChimeDebounceClientRpc()
     {
         doorChimeDebounce = false;
-        base.RemoveKeyFromIgnition();
     }
 
     // Cabin light
     public void CabinLightToggle()
     {
-        SetFrontCabinLightOn(!cablightToggle);
+        SetFrontCabinLightOnServerRpc();
+    }
+    [ServerRpc(RequireOwnership =false)]   
+    public void SetFrontCabinLightOnServerRpc()
+    {
+        SetFrontCabinLightOnClientRpc();
+    }
+    [ClientRpc]
+    public void SetFrontCabinLightOnClientRpc()
+    {
+        cabinLightBoolean = !cabinLightBoolean;
+        SetFrontCabinLightOn(!cabinLightBoolean);
     }
 
     public void ReplaceGearshiftAnimLocalClient()
     {
-        ReplaceGearshiftAnimServerRpc();
+        //Debug.Log("THIS client is the driver.");
+        int playerId = (int)GameNetworkManager.Instance.localPlayerController.playerClientId;
+        ReplaceGearshiftAnimServerRpc(playerId);
     }
 
     [ServerRpc(RequireOwnership = false)]
-    public void ReplaceGearshiftAnimServerRpc()
+    public void ReplaceGearshiftAnimServerRpc(int playerId)
     {
-        ReplaceGearshiftAnimClientRpc();
+        ReplaceGearshiftAnimClientRpc(playerId);
     }
 
-    [ClientRpc]
     // Animation overrides for the gear shifter
-    public void ReplaceGearshiftAnimClientRpc()
+    // For some reason... other players CANT SEE THIS!! WHY?????
+    [ClientRpc]
+    public void ReplaceGearshiftAnimClientRpc(int playerId)
     {
-        // Below is a very stupid hack used to prevent getting in cruiser to break hauler anims
-        currentDriver.playerBodyAnimator.SetBool("SA_JumpInCar", true);
-        CompanyHauler.Logger.LogDebug(currentDriver);
-        originalController = currentDriver.playerBodyAnimator.runtimeAnimatorController;
+        //Debug.Log("Received request to replace animations for player: " + playerId.ToString());
+        PlayerControllerB driverPlayer = StartOfRound.Instance.allPlayerScripts[playerId];
+        // Reset the sitting state w/ the jump parameter
+        driverPlayer.playerBodyAnimator.SetBool("SA_JumpInCar", true);
+        CompanyHauler.Logger.LogDebug(driverPlayer);
+        originalController = driverPlayer.playerBodyAnimator.runtimeAnimatorController;
         overrideController = new AnimatorOverrideController(originalController);
         overrideController["PullGearstick"] = haulerColumnShiftClip;
         overrideController["SitAndSteerRightHandOnGearstick"] = cruiserSteeringClip;
@@ -522,29 +570,33 @@ public class HaulerController : VehicleController
         overrideController["Key_InsertAgain"] = haulerKeyInsertAgainClip;
         overrideController["Key_Remove"] = haulerKeyRemoveClip;
         overrideController["Key_Untwist"] = haulerKeyUntwistClip;
-        currentDriver.playerBodyAnimator.runtimeAnimatorController = overrideController;
+        driverPlayer.playerBodyAnimator.runtimeAnimatorController = overrideController;
+        //Debug.Log("Assigned override controller with: " + overrideController["PullGearstick"].name);
         CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
+        //Debug.Log("Replaced gear shifter animation clip for player: " + playerId.ToString());
     }
 
     public void ReturnGearshiftAnimLocalClient()
     {
-        ReturnGearshiftAnimServerRpc();
+        int playerId = (int)GameNetworkManager.Instance.localPlayerController.playerClientId;
+        ReturnGearshiftAnimServerRpc(playerId);
     }
 
     [ServerRpc(RequireOwnership = false)]
-    public void ReturnGearshiftAnimServerRpc()
+    public void ReturnGearshiftAnimServerRpc(int playerId)
     {
-        ReturnGearshiftAnimClientRpc();
+        ReturnGearshiftAnimClientRpc(playerId);
     }
 
     [ClientRpc]
-    public void ReturnGearshiftAnimClientRpc()
+    public void ReturnGearshiftAnimClientRpc(int playerId)
     {
-        currentDriver.playerBodyAnimator.runtimeAnimatorController = originalController;
+        PlayerControllerB driverPlayer = StartOfRound.Instance.allPlayerScripts[playerId];
+        driverPlayer.playerBodyAnimator.runtimeAnimatorController = originalController;
         // Below is a very stupid hack used to prevent the sitting animation from not looping
-        currentDriver.playerBodyAnimator.SetBool("SA_Truck", true);
+        driverPlayer.playerBodyAnimator.SetBool("SA_Truck", true);
         // Below is a very stupid hack used to prevent several animations from not playing
-        currentDriver.playerBodyAnimator.SetBool("SA_JumpInCar", true);
+        driverPlayer.playerBodyAnimator.SetBool("SA_JumpInCar", true);
         CompanyHauler.Logger.LogDebug("Reverted to the original gearshift animation clip.");
     }
 
@@ -560,6 +612,7 @@ public class HaulerController : VehicleController
         ReplacePassengerAnimClientRpc(passenger);
     }
 
+    // TODO this isn't used yet, doesn't look quite right ingame
     [ClientRpc]
     public void ReplacePassengerAnimClientRpc(int passenger)
     {
@@ -634,7 +687,7 @@ public class HaulerController : VehicleController
     {
         for (int i = 0; i < 50; i++)
         {
-            RoundManager.Instance.PlayAudibleNoise(base.transform.position, 1050f, 1050f, 0, false, 19027);
+            RoundManager.Instance.PlayAudibleNoise(GameNetworkManager.Instance.localPlayerController.transform.position, 1050f, 1050f, 0, false, 19027);
             yield return new WaitForSeconds(0.1f);
         }
     }
