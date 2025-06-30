@@ -29,7 +29,7 @@ Speaking of which, this should be compatible with all vehicle mods that also use
 
 ## Credits
 ### Radio music
-All of the radio music is available from the public domain, available on the Internet Archive:
+All of the radio music is available from the public domain, thanks to the Internet Archive:
 https://archive.org/details/78rpmCollection1920s1930sPopularMusic
 
 ### FreeSound attributions
