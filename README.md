@@ -1,7 +1,5 @@
-Halden Electronics is excited to announce this year's model: the epitome of design, dependability, and luxury.
-
 # Company Hauler
-This mod adds an new vehicle—the ***COMPANY HAULER***—to the terminal for `600` credits. It is a four door pickup truck with an enclosed roof.
+This Lethal Company mod adds an new vehicle—the ***COMPANY HAULER***—to the terminal for `600` credits. It is a four door pickup truck with an enclosed roof.
 
 Note: this is *NOT* a cruiser model replacement mod. It adds a whole new vehicle to the terminal, courtesy of LLL!
 Speaking of which, this should be compatible with all vehicle mods that also use LLL.
