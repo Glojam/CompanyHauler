@@ -49,3 +49,6 @@ https://archive.org/details/78rpmCollection1920s1930sPopularMusic
 ### Special thanks
 * LLL and its maintainers, for including Extended Buyable Vehicle
 * LC Modding Discord for helping me when I got stuck
+
+Thunderstore link:
+https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
