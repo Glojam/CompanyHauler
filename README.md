@@ -36,17 +36,16 @@ All of the radio music is available from the public domain, thanks to the Intern
 https://archive.org/details/78rpmCollection1920s1930sPopularMusic
 
 ### FreeSound attributions
-HC_Toyota Pickup_Spaced Omni's.wav by stinkhorn -- https://freesound.org/s/20012/ -- License: Attribution 3.0\
-Truck starts and stops_edit.wav by FreqMan -- https://freesound.org/s/69211/ -- License: Attribution 4.0\
-truck-inside-05 by Eelke -- https://freesound.org/s/231446/ -- License: Attribution 4.0\
-horn_tone_C#3.wav by TaranP -- https://freesound.org/s/362188/ -- License: Attribution 4.0\
-GM Ignition On Chime by rryz19 -- https://freesound.org/s/733418/ -- License: Creative Commons 0\
-car window roll down by scriotxstudios -- https://freesound.org/s/354003/ -- License: Attribution 4.0\
-car windows roll up by scriotxstudios -- https://freesound.org/s/354002/ -- License: Attribution 4.0\
-Rain on Roof.wav by TheBoatman -- https://freesound.org/s/347703/ -- License: Attribution 4.0\
-BMW 640D Gran Coupe foley interior sunroof open mono 8040.wav by Soundholder -- https://freesound.org/s/425506/ -- License: Attribution 3.0
+`HC_Toyota Pickup_Spaced Omni's.wav by stinkhorn -- https://freesound.org/s/20012/ -- License: Attribution 3.0`\
+`Truck starts and stops_edit.wav by FreqMan -- https://freesound.org/s/69211/ -- License: Attribution 4.0`\
+`truck-inside-05 by Eelke -- https://freesound.org/s/231446/ -- License: Attribution 4.0`\
+`horn_tone_C#3.wav by TaranP -- https://freesound.org/s/362188/ -- License: Attribution 4.0`\
+`GM Ignition On Chime by rryz19 -- https://freesound.org/s/733418/ -- License: Creative Commons 0`\
+`car window roll down by scriotxstudios -- https://freesound.org/s/354003/ -- License: Attribution 4.0`\
+`car windows roll up by scriotxstudios -- https://freesound.org/s/354002/ -- License: Attribution 4.0`\
+`Rain on Roof.wav by TheBoatman -- https://freesound.org/s/347703/ -- License: Attribution 4.0`\
+`BMW 640D Gran Coupe foley interior sunroof open mono 8040.wav by Soundholder -- https://freesound.org/s/425506/ -- License: Attribution 3.0`
 
 ### Special thanks
 * LLL and its maintainers, for including Extended Buyable Vehicle
 * LC Modding Discord for helping me when I got stuck
-
