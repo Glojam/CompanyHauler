@@ -3,14 +3,10 @@ using BepInEx.Logging;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
-using LobbyCompatibility.Attributes;
-using LobbyCompatibility.Enums;
 
 namespace CompanyHauler;
 
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
-[BepInDependency("BMX.LobbyCompatibility", BepInDependency.DependencyFlags.HardDependency)]
-[LobbyCompatibility(CompatibilityLevel.ClientOnly, VersionStrictness.None)]
 public class CompanyHauler : BaseUnityPlugin
 {
     public static CompanyHauler Instance { get; private set; } = null!;
