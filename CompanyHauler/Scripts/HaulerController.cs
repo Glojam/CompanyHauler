@@ -132,6 +132,8 @@ public class HaulerController : VehicleController
 
     public List<GameObject> haulerObjectsToDestroy;
 
+    public GameObject mirrorsContainer;
+
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
     public void OnBLExit()
@@ -412,6 +414,7 @@ public class HaulerController : VehicleController
         setDashDials();
         checkEngineLight.SetActive(false);
         tractionControlLight.SetActive(false);
+        mirrorsContainer.SetActive(CompanyHauler.BoundConfig.haulerMirror.Value);
     }
 
     public new void Awake()
@@ -553,27 +556,25 @@ public class HaulerController : VehicleController
     }
 
     // Animation overrides for the gear shifter
-    // For some reason... other players CANT SEE THIS!! WHY?????
     [ClientRpc]
     public void ReplaceGearshiftAnimClientRpc(int playerId)
     {
-        //Debug.Log("Received request to replace animations for player: " + playerId.ToString());
         PlayerControllerB driverPlayer = StartOfRound.Instance.allPlayerScripts[playerId];
-        // Reset the sitting state w/ the jump parameter
-        driverPlayer.playerBodyAnimator.SetBool("SA_JumpInCar", true);
-        CompanyHauler.Logger.LogDebug(driverPlayer);
         originalController = driverPlayer.playerBodyAnimator.runtimeAnimatorController;
         overrideController = new AnimatorOverrideController(originalController);
+
+        driverPlayer.playerBodyAnimator.SetBool("SA_JumpInCar", true);
+
         overrideController["PullGearstick"] = haulerColumnShiftClip;
         overrideController["SitAndSteerRightHandOnGearstick"] = cruiserSteeringClip;
         overrideController["Key_Insert"] = haulerKeyInsertClip;
         overrideController["Key_InsertAgain"] = haulerKeyInsertAgainClip;
         overrideController["Key_Remove"] = haulerKeyRemoveClip;
         overrideController["Key_Untwist"] = haulerKeyUntwistClip;
+
         driverPlayer.playerBodyAnimator.runtimeAnimatorController = overrideController;
-        //Debug.Log("Assigned override controller with: " + overrideController["PullGearstick"].name);
+
         CompanyHauler.Logger.LogDebug("Replaced geasrhifter animation clip.");
-        //Debug.Log("Replaced gear shifter animation clip for player: " + playerId.ToString());
     }
 
     public void ReturnGearshiftAnimLocalClient()

@@ -18,7 +18,7 @@ public static class ForestGiantCollisionPatch
         PlayerControllerB player = __instance.MeetsStandardPlayerCollisionConditions(other, __instance.inEatingPlayerAnimation);
         if (!(player != null) || !(player == GameNetworkManager.Instance.localPlayerController))
         {
-            return false;
+            return true;
         }
         HaulerController haulerController = UnityEngine.Object.FindObjectOfType<HaulerController>();
         if (haulerController != null && player.physicsParent != null && player.physicsParent == haulerController.transform && !haulerController.backDoorOpen)
@@ -46,6 +46,6 @@ public static class ForestGiantCollisionPatch
             CompanyHauler.Logger.LogDebug("player is in Hauler, but their door is closed. Aborting!");
             return true;
         }
-        return false;
+        return true;
     }
 }

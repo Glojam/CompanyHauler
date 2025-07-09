@@ -12,11 +12,14 @@ public class CompanyHauler : BaseUnityPlugin
     public static CompanyHauler Instance { get; private set; } = null!;
     internal new static ManualLogSource Logger { get; private set; } = null!;
     internal static Harmony? Harmony { get; set; }
+    internal static HaulerConfig BoundConfig { get; private set; } = null!;
 
     private void Awake()
     {
         Logger = base.Logger;
         Instance = this;
+
+        BoundConfig = new HaulerConfig(base.Config);
 
         NetcodePatcher();
         Patch();
