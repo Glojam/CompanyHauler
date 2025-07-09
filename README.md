@@ -1,10 +1,10 @@
 [![Thunderstore Version](https://img.shields.io/thunderstore/v/Glojam/Company_Hauler?style=for-the-badge&logo=thunderstore&logoColor=white)](https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/)
 [![Thunderstore Downloads](https://img.shields.io/thunderstore/dt/Glojam/Company_Hauler?style=for-the-badge&logo=thunderstore&logoColor=white)](https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/)
 # Company Hauler
-This Lethal Company mod adds an new vehicle—the ***COMPANY HAULER***—to the terminal for `600` credits. It is a four door pickup truck with an enclosed roof.
+This Lethal Company mod adds an new vehicle—the Company Hauler—to the terminal for `530` credits. It is a four door pickup truck with an enclosed roof.
 
-Note: this is *NOT* a cruiser model replacement mod. It adds a whole new vehicle to the terminal, courtesy of LLL!
-Speaking of which, this should be compatible with all vehicle mods that also use LLL.
+Thunderstore link:
+https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
 
 ## Features
 * Four seats
@@ -49,6 +49,3 @@ https://archive.org/details/78rpmCollection1920s1930sPopularMusic
 ### Special thanks
 * LLL and its maintainers, for including Extended Buyable Vehicle
 * LC Modding Discord for helping me when I got stuck
-
-Thunderstore link:
-https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
