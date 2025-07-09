@@ -1,7 +1,7 @@
 [![Thunderstore Version](https://img.shields.io/thunderstore/v/Glojam/Company_Hauler?style=for-the-badge&logo=thunderstore&logoColor=white)](https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/)
 [![Thunderstore Downloads](https://img.shields.io/thunderstore/dt/Glojam/Company_Hauler?style=for-the-badge&logo=thunderstore&logoColor=white)](https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/)
 # Company Hauler
-This Lethal Company mod adds an new vehicle—the Company Hauler—to the terminal for `600` credits. It is a four door pickup truck with an enclosed roof.
+This Lethal Company mod adds an new vehicle—the Company Hauler—to the terminal for `530` credits. It is a four door pickup truck with an enclosed roof.
 
 Thunderstore link:
 https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
