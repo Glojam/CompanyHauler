@@ -21,30 +21,30 @@ public static class ForestGiantCollisionPatch
             return true;
         }
         HaulerController haulerController = UnityEngine.Object.FindObjectOfType<HaulerController>();
-        if (haulerController != null && player.physicsParent != null && player.physicsParent == haulerController.transform && !haulerController.backDoorOpen)
+        if (haulerController != null && player.physicsParent != null && player.physicsParent == haulerController.transform)
         {
             if (player == haulerController.currentDriver && haulerController.driverSideDoor.boolValue)
             {
                 CompanyHauler.Logger.LogDebug("player is Driver and their door is open. Eating them!");
-                return false;
+                return true;
             }
             else if (player == haulerController.currentPassenger && haulerController.passengerSideDoor.boolValue)
             {
                 CompanyHauler.Logger.LogDebug("player is Passenger and their door is open. Eating them!");
-                return false;
+                return true;
             }
             else if (player == haulerController.currentBL && haulerController.BLSideDoor.boolValue)
             {
                 CompanyHauler.Logger.LogDebug("player is BL and their door is open. Eating them!");
-                return false;
+                return true;
             }
             else if (player == haulerController.currentBR && haulerController.BRSideDoor.boolValue)
             {
                 CompanyHauler.Logger.LogDebug("player is BR and their door is open. Eating them!");
-                return false;
+                return true;
             }
             CompanyHauler.Logger.LogDebug("player is in Hauler, but their door is closed. Aborting!");
-            return true;
+            return false;
         }
         return true;
     }
