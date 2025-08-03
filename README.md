@@ -13,7 +13,7 @@ https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
 * Working tachometer, speedometer, and warning lights
 * Side mirrors
 * Neat interactables like automatic windows, a sunroof, and a tailgate!
-* More than **2x** the health of the Cruiser, *at the expense of having no boost*
+* More than **3x** the health of the Cruiser, *at the expense of having no boost*
 * **6** radio songs
 * Custom sounds, driver animations, and manual
 * Other things...?
