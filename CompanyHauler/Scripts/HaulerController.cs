@@ -410,6 +410,7 @@ public class HaulerController : VehicleController
     // Additional things to do on start
     public new void Start()
     {
+        baseCarHP = CompanyHauler.BoundConfig.haulerHealth.Value;
         base.Start();
         setDashDials();
         checkEngineLight.SetActive(false);
@@ -508,7 +509,7 @@ public class HaulerController : VehicleController
     [ClientRpc]
     public void TryChimeSoundClientRpc()
     {
-        if (!doorChimeDebounce)
+        if (!doorChimeDebounce && (localPlayerInControl && !ignitionStarted))
         {
             ChimeAudio.PlayOneShot(chimeSound);
             doorChimeDebounce = true;
