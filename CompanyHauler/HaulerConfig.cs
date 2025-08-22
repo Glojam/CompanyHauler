@@ -9,6 +9,7 @@ class HaulerConfig
 {
     public readonly ConfigEntry<bool> haulerMirror;
     public readonly ConfigEntry<int> haulerHealth;
+    public readonly ConfigEntry<bool> haulerLean;
 
     public HaulerConfig(ConfigFile cfg)
     {
@@ -26,6 +27,13 @@ class HaulerConfig
             "Health",
             100,
             "Max health of the Hauler (default: 100). For reference, the Cruiser has a max health of 30."
+        );
+
+        haulerLean = cfg.Bind(
+            "General",
+            "AllowLean",
+            true,
+            "Allow leaning in the driver seat to see out the back window."
         );
 
         ClearOrphanedEntries(cfg);

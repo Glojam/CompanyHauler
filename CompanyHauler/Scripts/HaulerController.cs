@@ -116,6 +116,8 @@ public class HaulerController : VehicleController
 
     public AnimationClip haulerPassengerSitClip;
 
+    public AnimationClip haulerSitAndSteerNoHandsClip;
+
     public AudioClip TrainHornAudioClip;
 
     public AudioSource TrainHornAudio;
@@ -133,6 +135,8 @@ public class HaulerController : VehicleController
     public List<GameObject> haulerObjectsToDestroy;
 
     public GameObject mirrorsContainer;
+
+    public new Collider truckColliderThingINeedForThatStupidAssBird;
 
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -410,6 +414,7 @@ public class HaulerController : VehicleController
     // Additional things to do on start
     public new void Start()
     {
+        ontopOfTruckCollider = truckColliderThingINeedForThatStupidAssBird;
         baseCarHP = CompanyHauler.BoundConfig.haulerHealth.Value;
         base.Start();
         setDashDials();
@@ -568,6 +573,7 @@ public class HaulerController : VehicleController
 
         overrideController["PullGearstick"] = haulerColumnShiftClip;
         overrideController["SitAndSteerRightHandOnGearstick"] = cruiserSteeringClip;
+        overrideController["SitAndSteerNoHands"] = haulerSitAndSteerNoHandsClip;
         overrideController["Key_Insert"] = haulerKeyInsertClip;
         overrideController["Key_InsertAgain"] = haulerKeyInsertAgainClip;
         overrideController["Key_Remove"] = haulerKeyRemoveClip;
