@@ -29,7 +29,7 @@ https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
 * Compatibility with various cruiser improvement mods is TBD
 
 ## Credits
-3D modelling and programming by me!
+3D modelling and programming by Glojam and ScandalTheVandal
 
 ### Radio music
 All of the radio music is available from the public domain, thanks to the Internet Archive:

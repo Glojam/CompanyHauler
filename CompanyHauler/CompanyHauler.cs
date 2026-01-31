@@ -14,7 +14,7 @@ public class CompanyHauler : BaseUnityPlugin
     internal static Harmony? Harmony { get; set; }
     internal static HaulerConfig BoundConfig { get; private set; } = null!;
 
-    private void Awake()
+    public void Awake()
     {
         Logger = base.Logger;
         Instance = this;

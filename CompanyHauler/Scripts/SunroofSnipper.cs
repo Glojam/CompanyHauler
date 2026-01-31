@@ -5,11 +5,10 @@ namespace CompanyHauler.Scripts;
 
 public class SunroofSnipper : MonoBehaviour
 {
-    public AudioSource snipAudio;
-
-    public AudioClip snipClip;
+    public AudioSource snipAudio = null!;
+    public AudioClip snipClip = null!;
     
-    private void OnTriggerEnter(Collider other)
+    public void OnTriggerEnter(Collider other)
     {
         if (other.gameObject.CompareTag("Player"))
         {

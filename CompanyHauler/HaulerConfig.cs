@@ -10,6 +10,7 @@ class HaulerConfig
     public readonly ConfigEntry<bool> haulerMirror;
     public readonly ConfigEntry<int> haulerHealth;
     public readonly ConfigEntry<bool> haulerLean;
+    public readonly ConfigEntry<bool> haulerAutoCenter;
 
     public HaulerConfig(ConfigFile cfg)
     {
@@ -34,6 +35,13 @@ class HaulerConfig
             "AllowLean",
             true,
             "Allow leaning in the driver seat to see out the back window."
+        );
+
+        haulerAutoCenter = cfg.Bind(
+            "General",
+            "AutoCenter",
+            false,
+            "Automatically center the steering wheel"
         );
 
         ClearOrphanedEntries(cfg);
