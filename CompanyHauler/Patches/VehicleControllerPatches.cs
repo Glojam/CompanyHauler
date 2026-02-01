@@ -202,4 +202,34 @@ public static class VehicleControllerPatches
         if (audioActive && ((audio == __instance.extremeStressAudio && __instance.magnetedToShip) || ((audio == __instance.rollingAudio || audio == __instance.skiddingAudio) && (__instance.magnetedToShip || (!__instance.FrontLeftWheel.isGrounded && !__instance.FrontRightWheel.isGrounded && !__instance.BackLeftWheel.isGrounded && !__instance.BackRightWheel.isGrounded)))))
             audioActive = false;
     }
+
+    // Fix modded damage triggers from causing unexpected destroy behavior
+    [HarmonyPatch("DestroyCar")]
+    [HarmonyPrefix]
+    static bool DestroyCar_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.DestroyCar();
+        return false;
+    }
+
+    // Fix modded damage triggers from causing unexpected damage behavior
+    [HarmonyPatch("DealPermanentDamage")]
+    [HarmonyPrefix]
+    static bool DealPermanentDamage_Prefix(VehicleController __instance, bool __runOriginal, int damageAmount, Vector3 damagePosition = default(Vector3))
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.DealPermanentDamage(damageAmount, damagePosition);
+        return false;
+    }
 }

@@ -278,6 +278,7 @@ public class HaulerController : VehicleController
         if (!StartOfRound.Instance.inShipPhase)
             return;
 
+        hasBeenSpawned = true;
         magnetedToShip = true;
         loadedVehicleFromSave = true;
         hasDeliveredVehicle = true;
