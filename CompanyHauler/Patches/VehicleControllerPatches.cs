@@ -188,10 +188,10 @@ public static class VehicleControllerPatches
         if (__instance is HaulerController hauler)
         {
             if (!hauler.keyIsInIgnition) return;
+            if (hauler.CriticalChimeAudio.isPlaying) return;
             if ((hauler.gear == CarGearShift.Drive || hauler.gear == CarGearShift.Reverse) && (hauler.driverSideDoor.boolValue || hauler.passengerSideDoor.boolValue || hauler.BLSideDoor.boolValue || hauler.BRSideDoor.boolValue))
             {
-                Debug.Log("Playing chime");
-                hauler.ChimeAudio.PlayOneShot(hauler.chimeSoundCritical);
+                hauler.CriticalChimeAudio.Play();
             }
         }
     }

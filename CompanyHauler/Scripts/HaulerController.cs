@@ -144,6 +144,7 @@ public class HaulerController : VehicleController
     public AudioClip chimeSound = null!;
     public AudioClip chimeSoundCritical = null!;
     public AudioSource ChimeAudio = null!;
+    public AudioSource CriticalChimeAudio = null!;
 
     public AudioClip TrainHornAudioClip = null!;
     public AudioSource TrainHornAudio = null!;
