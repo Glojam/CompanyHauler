@@ -180,6 +180,22 @@ public static class VehicleControllerPatches
         }
     }
 
+    // Play the door chime when shifting to drive/rev with any of the doors open
+    [HarmonyPatch("ShiftToGearClientRpc")]
+    [HarmonyPostfix]
+    static void ShiftToGearClientRpc_Postfix(VehicleController __instance, int setGear, int playerId)
+    {   
+        if (__instance is HaulerController hauler)
+        {
+            if (!hauler.keyIsInIgnition) return;
+            if ((hauler.gear == CarGearShift.Drive || hauler.gear == CarGearShift.Reverse) && (hauler.driverSideDoor.boolValue || hauler.passengerSideDoor.boolValue || hauler.BLSideDoor.boolValue || hauler.BRSideDoor.boolValue))
+            {
+                Debug.Log("Playing chime");
+                hauler.ChimeAudio.PlayOneShot(hauler.chimeSoundCritical);
+            }
+        }
+    }
+
     // Fix radio not turning on for clients unless the channel is changed
     [HarmonyPatch("SwitchRadio")]
     [HarmonyPostfix]

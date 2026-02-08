@@ -67,8 +67,10 @@ public class HaulerController : VehicleController
 
     public PlayerControllerB currentBL = null!;
     public PlayerControllerB currentBR = null!;
+    public PlayerControllerB currentMiddle = null!;
     public InteractTrigger BLSeatTrigger = null!;
     public InteractTrigger BRSeatTrigger = null!;
+    public InteractTrigger MiddleSeatTrigger = null!;
 
     public Transform[] BL_ExitPoints = null!;
     public Transform[] BR_ExitPoints = null!;
@@ -96,6 +98,7 @@ public class HaulerController : VehicleController
 
     public bool localPlayerInBLSeat;
     public bool localPlayerInBRSeat;
+    public bool localPlayerInMiddleSeat;
 
     [Header("Effects")]
 
@@ -262,6 +265,7 @@ public class HaulerController : VehicleController
     // Additional things to do on start
     public new void Start()
     {
+        chanceToStartIgnition = 5f;
         FrontLeftWheel.brakeTorque = 2000f;
         FrontRightWheel.brakeTorque = 2000f;
         BackLeftWheel.brakeTorque = 2000f;
@@ -1059,7 +1063,7 @@ public class HaulerController : VehicleController
             if (StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(physicsRegion))
                 StartOfRound.Instance.CurrentPlayerPhysicsRegions.Remove(physicsRegion);
 
-            if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat)
+            if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat || localPlayerInMiddleSeat)
                 GameNetworkManager.Instance.localPlayerController.CancelSpecialTriggerAnimations();
 
             GrabbableObject[] itemsInTruck = physicsRegion.physicsTransform.GetComponentsInChildren<GrabbableObject>();
@@ -1848,8 +1852,6 @@ public class HaulerController : VehicleController
         carExhaustParticle.Stop(true, ParticleSystemStopBehavior.StopEmitting);
     }
 
-
-
     public new void RemoveKeyFromIgnition()
     {
         if (!localPlayerInControl)
@@ -1922,12 +1924,71 @@ public class HaulerController : VehicleController
         keyIsInIgnition = keyInSlot;
     }
 
+    // BACK-MIDDLE PASSENGER METHODS //////////////////////////
 
+    public void OnMiddleExit()
+    {
+        MiddleSeatTrigger.interactable = true;
+        localPlayerInMiddleSeat = false;
+        currentMiddle = null!;
+        SetVehicleCollisionForPlayer(setEnabled: true, GameNetworkManager.Instance.localPlayerController);
+        Middle_LeaveVehicleServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId, GameNetworkManager.Instance.localPlayerController.transform.position);
+    }
 
+    public void ExitMiddleSideSeat(bool isLeftSeat)
+    {
+        if (localPlayerInMiddleSeat)
+        {
+            int num = CanExitBackSeats(isLeftSeat);
+            Transform[] exitPointList = isLeftSeat ? BL_ExitPoints : BR_ExitPoints;
+            if (num != -1)
+            {
+                GameNetworkManager.Instance.localPlayerController.TeleportPlayer(exitPointList[num].position);
+            }
+            else
+            {
+                GameNetworkManager.Instance.localPlayerController.TeleportPlayer(exitPointList[1].position);
+            }
+        }
+    }
 
+    [ServerRpc(RequireOwnership = false)]
+    public void Middle_LeaveVehicleServerRpc(int playerId, Vector3 exitPoint)
+    {
+        Middle_LeaveVehicleClientRpc(playerId, exitPoint);
+    }
 
+    [ClientRpc]
+    public void Middle_LeaveVehicleClientRpc(int playerId, Vector3 exitPoint)
+    {
+        PlayerControllerB playerControllerB = StartOfRound.Instance.allPlayerScripts[playerId];
+        if (!(playerControllerB == GameNetworkManager.Instance.localPlayerController))
+        {
+            playerControllerB.TeleportPlayer(exitPoint);
+            currentMiddle = null!;
+            if (!base.IsOwner)
+            {
+                SetVehicleCollisionForPlayer(setEnabled: true, GameNetworkManager.Instance.localPlayerController);
+            }
+            MiddleSeatTrigger.interactable = true;
+        }
+    }
 
-
+    public void SetMiddlePassengerInCar(PlayerControllerB player)
+    {
+        if (player == GameNetworkManager.Instance.localPlayerController)
+        {
+            localPlayerInMiddleSeat = true;
+            //SetVehicleCollisionForPlayer(false, player);
+            int passengerId = (int)player.playerClientId;
+            SetVehicleCollisionForPlayerServerRpc(false, passengerId);
+        }
+        else
+        {
+            MiddleSeatTrigger.interactable = false;
+        }
+        currentMiddle = player;
+    }
 
     // BACK-LEFT PASSENGER METHODS //////////////////////////
 
@@ -2306,7 +2367,7 @@ public class HaulerController : VehicleController
         if (GameNetworkManager.Instance.localPlayerController.physicsParent != physicsRegion.physicsTransform)
             return;
 
-        if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat)
+        if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat || localPlayerInMiddleSeat)
             return;
 
         if (vel.magnitude >= 50f)
@@ -2435,7 +2496,7 @@ public class HaulerController : VehicleController
         mainRigidbody.AddForceAtPosition(Vector3.up * 1560f, hoodFireAudio.transform.position - Vector3.up, ForceMode.Impulse);
 
         // Kill backseat players if the car explodes
-        if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat)
+        if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat || localPlayerInMiddleSeat)
         {
             Debug.Log($"Killing player with force magnitude of : {(Vector3.up * 27f + 20f * UnityEngine.Random.insideUnitSphere).magnitude}");
             GameNetworkManager.Instance.localPlayerController.KillPlayer(Vector3.up * 27f + 20f * UnityEngine.Random.insideUnitSphere, spawnBody: true, CauseOfDeath.Blast, 6, Vector3.up * 1.5f);
@@ -2471,7 +2532,7 @@ public class HaulerController : VehicleController
     private new void DamagePlayerInVehicle(Vector3 vel, float magnitude)
     {
         // Damage backseat players if the car hits something, like the front seats do
-        if (localPlayerInBRSeat || localPlayerInBLSeat || localPlayerInPassengerSeat || localPlayerInControl)
+        if (localPlayerInBRSeat || localPlayerInBLSeat || localPlayerInMiddleSeat || localPlayerInPassengerSeat || localPlayerInControl)
         {
             if (magnitude > 28f)
             {
@@ -2507,7 +2568,7 @@ public class HaulerController : VehicleController
     public new void OnDisable()
     {
         DisableControl();
-        if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat)
+        if (localPlayerInControl || localPlayerInPassengerSeat || localPlayerInBLSeat || localPlayerInBRSeat || localPlayerInMiddleSeat)
         {
             GameNetworkManager.Instance.localPlayerController.CancelSpecialTriggerAnimations();
         }
