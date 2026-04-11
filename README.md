@@ -19,10 +19,10 @@ https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
 * Other things...?
 
 ## Pictures
-![Front angle of the Hauler](https://i.imgur.com/4vCCw10.png)
-![Bed view of the Hauler](https://i.imgur.com/VedpSzy.png)
-![Cab view](https://i.imgur.com/9AISuBJ.png)
-![On the magnet](https://i.imgur.com/9lFG8xS.png)
+(https://ibb.co/0RB413Ss)
+(https://ibb.co/8ny8yvVj)
+(https://ibb.co/mrgSCY5w)
+(https://ibb.co/ynS41Zd5)
 
 ## Compatibility
 * Should be compatible with all other vehicle mods that depend on LLL
