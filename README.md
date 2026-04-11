@@ -19,11 +19,6 @@ https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
 * Other things...?
 
 ## Pictures
-<img width="1920" height="1080" alt="2026-04-11_23-27-13_Scandal" src="https://github.com/user-attachments/assets/76be828e-6ad4-4acc-b63e-a8ddd366dafb" />
-<img width="1920" height="1080" alt="2026-04-11_23-24-17_Scandal" src="https://github.com/user-attachments/assets/25d1a49e-0d6f-4ee0-9750-dedf795735b7" />
-<img width="1920" height="1080" alt="2026-04-11_23-24-37_Scandal" src="https://github.com/user-attachments/assets/ba4bf191-c12e-4d21-a33f-54b54d69f2be" />
-<img width="1920" height="1080" alt="2026-04-11_23-25-25_Scandal" src="https://github.com/user-attachments/assets/ad17d6e9-4a3a-487c-8eda-584dfe4a3d27" />
-
 
 ## Compatibility
 * Should be compatible with all other vehicle mods that depend on LLL
