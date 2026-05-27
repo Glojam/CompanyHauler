@@ -1,94 +1,111 @@
-﻿using GameNetcodeStuff;
+﻿using CompanyHauler.Scripts;
+using GameNetcodeStuff;
 using UnityEngine;
-using System.Linq;
-using CompanyHauler.Scripts;
 
 namespace CompanyHauler.Utils;
 public static class VehicleUtils
 {
-    public static bool IsPlayerInTruck(PlayerControllerB player, HaulerController vehicle)
+    public static bool IsEnemyInPickup(EnemyAI enemyScript, HaulerController pickupController)
     {
-        // variables
-        Vector3 playerTransform = player.transform.position;
-        Transform playerOverride = player.overridePhysicsParent;
-        Collider physicsCollider = vehicle.physicsRegion.gameObject.GetComponent<Collider>();
-
-        // player is the driver
-        if (player == vehicle.currentDriver)
+        if ((pickupController.collisionTrigger.insideTruckNavMeshBounds.ClosestPoint(enemyScript.transform.position) == enemyScript.transform.position) ||
+            (pickupController.collisionTrigger.insideTruckNavMeshBounds.ClosestPoint(enemyScript.agent.destination) == enemyScript.agent.destination))
             return true;
-
-        // player is the front right passenger
-        if (player == vehicle.currentPassenger)
-            return true;
-
-        // player is the back left passenger
-        if (player == vehicle.currentBL)
-            return true;
-
-        // player is the back right passenger
-        if (player == vehicle.currentBR)
-            return true;
-
-        // player is within the physics regions bounds, and they're not within the cab nor the storage compartment
-        //if (playerOverride == null && (physicsCollider.bounds.Contains(playerTransform)) && (!vehicle.storageCompartment.bounds.Contains(playerTransform) && !(vehicle.cabinPoint.bounds.Contains(playerTransform))))
-        //    return true;
-
-        // player is within the cabin
-        //if (playerOverride == null && vehicle.cabinPoint.bounds.Contains(playerTransform))
-        //    return true;
-
-        // player is within the storage compartment
-        //if (playerOverride == null && vehicle.storageCompartment.bounds.Contains(playerTransform))
-        //    return true;
-
         return false;
     }
 
-    public static bool IsPlayerProtectedByTruck(PlayerControllerB player, HaulerController vehicle)
+    public static bool IsPlayerSeatedInPickup()
     {
-        // variables
-        bool driverDoorOpen = vehicle.driverSideDoor.boolValue;
-        bool passengerDoorOpen = vehicle.passengerSideDoor.boolValue;
-        bool backLeftPassengerDoorOpen = vehicle.BLSideDoor.boolValue;
-        bool backRightPassengerDoorOpen = vehicle.BRSideDoor.boolValue;
+        return PlayerUtils.isSeatedInPickup;
+    }
 
-        Vector3 playerTransform = player.transform.position;
-        Transform playerOverride = player.overridePhysicsParent;
-        Collider physicsCollider = vehicle.physicsRegion.gameObject.GetComponent<Collider>();
+    public static bool IsPlayerInPickupBounds(HaulerController pickupController)
+    {
+        return pickupController.vehicleZone.playerInZone;
+    }
 
-        // player is the driver and their door is open
-        if (player == vehicle.currentDriver && driverDoorOpen)
+    public static bool IsPlayerInPickupCab(HaulerController pickupController)
+    {
+        return pickupController.vehicleCabZone.playerInZone;
+    }
+
+    public static bool IsSeatedPlayerProtected(PlayerControllerB playerController, HaulerController pickupController, bool checkSunroof = false, bool checkWindows = false, bool windshieldCheck = false, bool velocityCheck = false, float velocityMagnitude = 0f)
+    {
+        float avgVel = pickupController.averageVelocity.magnitude;
+
+        if (velocityCheck && avgVel > velocityMagnitude)
+            return true;
+
+        bool windshieldBroken = pickupController.windshieldBroken;
+        bool sunroofOpen = pickupController.sunroofOpen;
+        bool isFrontSeatOccupant = playerController == pickupController.currentDriver ||
+                                   playerController == pickupController.currentPassenger;
+
+        if ((checkSunroof && sunroofOpen) || (isFrontSeatOccupant && windshieldCheck && windshieldBroken))
             return false;
 
-        // player is the front right passenger and their door is open
-        if (player == vehicle.currentPassenger && passengerDoorOpen)
+        bool frontLeftSideOpen = pickupController.driverSideDoor.boolValue || (checkWindows && pickupController.frontLeftWindow.isWindowOpen);
+        bool frontRightSideOpen = pickupController.passengerSideDoor.boolValue || (checkWindows && pickupController.frontRightWindow.isWindowOpen);
+
+        bool backLeftSideOpen = pickupController.backLeftDoor.boolValue || (checkWindows && pickupController.backLeftWindow.isWindowOpen);
+        bool backRightSideOpen = pickupController.backRightDoor.boolValue || (checkWindows && pickupController.backRightWindow.isWindowOpen);
+
+        if ((playerController == pickupController.currentDriver && frontLeftSideOpen) || 
+            (playerController == pickupController.currentPassenger && frontRightSideOpen))
             return false;
-
-        // player is the back left passenger and their door is open
-        if (player == vehicle.currentBL && backLeftPassengerDoorOpen)
+        if ((playerController == pickupController.currentBackLeftPassenger && backLeftSideOpen) ||
+            (playerController == pickupController.currentMiddlePassenger && (backLeftSideOpen || backRightSideOpen)) ||
+            (playerController == pickupController.currentBackRightPassenger && backRightSideOpen))
             return false;
-
-        // player is the back right passenger and their door is open
-        if (player == vehicle.currentBR && backRightPassengerDoorOpen)
-            return false;
-
-        // player is within the physics regions bounds, and they're not within the cab nor the storage compartment
-        //if (playerOverride == null && (physicsCollider.bounds.Contains(playerTransform)) && (!vehicle.storageCompartment.bounds.Contains(playerTransform) && (!vehicle.cabinPoint.bounds.Contains(playerTransform))))
-        //    return false;
-
-        // player is within the cabin, and either door is open
-        //if (playerOverride == null && vehicle.cabinPoint.bounds.Contains(playerTransform) && (driverDoorOpen || passengerDoorOpen))
-        //    return false;
-
-        // player is within the storage compartment, and the back door is open
-        //if (playerOverride == null && vehicle.storageCompartment.bounds.Contains(playerTransform) && (backDoorOpen || sideDoorOpen))
-        //    return false;
 
         return true;
     }
 
-    public static bool IsLocalPlayer(this PlayerControllerB player)
+    public static bool IsPlayerProtectedByPickup(PlayerControllerB playerController, HaulerController pickupController, bool checkSunroof = false, bool checkWindows = false, bool windshieldCheck = false, bool velocityCheck = false, float velocityMagnitude = 0f)
     {
-        return player == GameNetworkManager.Instance.localPlayerController;
+        if (pickupController.carDestroyed)
+            return false;
+
+        float avgVel = pickupController.averageVelocity.magnitude;
+
+        if (velocityCheck && avgVel > velocityMagnitude)
+            return true;
+
+        bool windshieldBroken = pickupController.windshieldBroken;
+        bool sunroofOpen = pickupController.sunroofOpen;
+
+        bool doorsOpen = pickupController.driverSideDoor.boolValue ||
+                         pickupController.passengerSideDoor.boolValue ||
+                         pickupController.backLeftDoor.boolValue ||
+                         pickupController.backRightDoor.boolValue;
+
+        bool windowsOpen = pickupController.frontLeftWindow.isWindowOpen ||
+                           pickupController.frontRightWindow.isWindowOpen ||
+                           pickupController.backLeftWindow.isWindowOpen ||
+                           pickupController.backRightWindow.isWindowOpen;
+
+        bool tailgateOpen = pickupController.tailgateOpen;
+
+        if (IsPlayerInPickupCab(pickupController) && 
+            doorsOpen || 
+            (checkSunroof && sunroofOpen) || 
+            (checkWindows && windowsOpen) || 
+            (windshieldCheck && windshieldBroken))
+            return false;
+        else if (IsPlayerInPickupBounds(pickupController) &&
+                !IsPlayerInPickupCab(pickupController))
+            return false;
+
+        return true;
+    }
+
+    public static bool IsPlayerNearPickup(PlayerControllerB playerController, HaulerController pickupController)
+    {
+        Vector3 vehicleTransform = pickupController.mainRigidbody.position;
+        Vector3 playerTransform = playerController.transform.position;
+
+        if (Vector3.Distance(playerTransform, vehicleTransform) > 10f)
+            return false;
+
+        return true;
     }
 }

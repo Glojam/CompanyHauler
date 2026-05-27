@@ -4,10 +4,9 @@ using UnityEngine;
 
 namespace CompanyHauler.Utils;
 
-public static class References
+internal static class References
 {
-    // Optimisation
-    internal static HaulerController truckController = null!;
-    internal static PlayerControllerB lastDriver = null!;
+    // optimisation
     internal static ItemDropship itemShip = null!;
+    internal static HaulerController pickupController = null!;
 }

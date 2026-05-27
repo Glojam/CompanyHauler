@@ -1,205 +1,316 @@
-﻿using CompanyHauler.Scripts;
-using GameNetcodeStuff;
-using HarmonyLib;
+﻿using HarmonyLib;
 using UnityEngine;
+using CompanyHauler.Scripts;
+using GameNetcodeStuff;
 
 namespace CompanyHauler.Patches;
 
 [HarmonyPatch(typeof(VehicleController))]
 public static class VehicleControllerPatches
 {
-    // Cabin light override injection
-    [HarmonyPatch("SetFrontCabinLightOn")]
+    [HarmonyPatch(nameof(VehicleController.DisableVehicleCollisionForAllPlayers))]
     [HarmonyPrefix]
-    static void SetFrontCabinLightOn_Prefix(VehicleController __instance, bool setOn)
+    static bool DisableVehicleCollisionForAllPlayers_Prefix(VehicleController __instance, bool __runOriginal)
     {
-        HaulerController? hauler = __instance as HaulerController;
-        if (hauler == null) return;
-
-        Material[] materials = hauler.mainBodyMesh.materials;
-        materials[3] = setOn ? hauler.cabinLightOnMat : hauler.cabinLightOffMat;
-        hauler.mainBodyMesh.materials = materials;
-        hauler.cablightToggle = !hauler.cablightToggle;
-    }
-
-    // Prevent the driver from enabling collision to seated players, which is a problem for the Hauler
-    [HarmonyPatch("EnableVehicleCollisionForAllPlayers")]
-    [HarmonyPrefix]
-    static bool EnableVehicleCollisionForAllPlayers_Prefix(VehicleController __instance)
-    {
-        if (__instance is HaulerController hauler)
+        if (!__runOriginal)
             return false;
 
-        return true;
+        if (__instance is not HaulerController)
+            return true;
+
+        return false;
     }
 
-    // Prevent the driver from disabling collision to unseated players, which is a problem for the Hauler
-    [HarmonyPatch("DisableVehicleCollisionForAllPlayers")]
+    [HarmonyPatch(nameof(VehicleController.EnableVehicleCollisionForAllPlayers))]
     [HarmonyPrefix]
-    static bool DisableVehicleCollisionForAllPlayers_Prefix(VehicleController __instance)
+    static bool EnableVehicleCollisionForAllPlayers_Prefix(VehicleController __instance, bool __runOriginal)
     {
-        if (__instance is HaulerController hauler)
+        if (!__runOriginal)
             return false;
 
-        return true;
+        if (__instance is not HaulerController)
+            return true;
+
+        return false;
     }
 
-    // Custom gearshift anim replacement (add override)
-    [HarmonyPatch("TakeControlOfVehicle")]
+    [HarmonyPatch(nameof(VehicleController.SetVehicleCollisionForPlayer))]
     [HarmonyPrefix]
-    static void TakeControlOfVehicle_Postfix(VehicleController __instance)
+    static bool SetVehicleCollisionForPlayer_Prefix(VehicleController __instance, bool __runOriginal, bool setEnabled, PlayerControllerB player)
     {
-        if (__instance is HaulerController hauler)
-        {
-            hauler.ReplaceGearshiftAnimLocalClient();
-        }
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController)
+            return true;
+
+        return false;
     }
 
-    // Driver-only collision change + Custom gearshift anim replacement (undo override)
-    [HarmonyPatch("LoseControlOfVehicle")]
+    [HarmonyPatch(nameof(VehicleController.SetBackDoorOpen))]
     [HarmonyPrefix]
-    static void LoseControlOfVehicle_Prefix(VehicleController __instance)
+    static bool SetBackDoorOpen_Prefix(VehicleController __instance, bool __runOriginal, bool open)
     {
-        if (__instance is HaulerController hauler)
-        {
-            if (hauler.currentDriver == GameNetworkManager.Instance.localPlayerController)
-            {
-                hauler.SetVehicleCollisionForPlayer(setEnabled: true, GameNetworkManager.Instance.localPlayerController);
-            }
-            hauler.ReturnGearshiftAnimLocalClient();
-        }
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController)
+            return true;
+
+        return false;
     }
 
-    [HarmonyPatch("StartMagneting")]
+    [HarmonyPatch(nameof(VehicleController.SetFrontCabinLightOn))]
+    [HarmonyPrefix]
+    static bool SetFrontCabinLightOn_Prefix(VehicleController __instance, bool __runOriginal, bool setOn)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.SetFrontCabinLightOn(setOn);
+        return false;
+    }
+
+    // thank you MattyMatty, and DiFFoZ for helping me with this!!
+    [HarmonyPatch(nameof(VehicleController.AddEngineOil))]
+    [HarmonyPrefix]
+    static bool AddEngineOil_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            // somebody else has redirected the function ignore the call
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            // not us run the original code
+            return true;
+
+        // our class run our code, and skip original.
+        vehicle.AddEngineOil();
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.AddTurboBoost))]
+    [HarmonyPrefix]
+    static bool AddTurboBoost_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        //vehicle.AddTurboBoost();
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.StartMagneting))]
     [HarmonyPrefix]
     static bool StartMagneting_Prefix(VehicleController __instance, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        if (__instance is not HaulerController hauler)
+        if (__instance is not HaulerController vehicle)
             return true;
 
-        hauler.StartMagneting();
         return false;
     }
 
-    [HarmonyPatch("CollectItemsInTruck")]
+    [HarmonyPatch(nameof(VehicleController.CollectItemsInTruck))]
     [HarmonyPrefix]
     static bool CollectItemsInTruck_Prefix(VehicleController __instance, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        if (__instance is not HaulerController hauler)
+        if (__instance is not HaulerController vehicle)
             return true;
 
-        hauler.CollectItemsInHauler();
         return false;
     }
 
-    // Redirect function, too lazy for a transpiler - Scandal
-    [HarmonyPatch("CarReactToObstacle")]
+
+    [HarmonyPatch(nameof(VehicleController.DestroyCar))]
     [HarmonyPrefix]
-    static bool CarReactToObstacle_Prefix(VehicleController __instance, Vector3 vel, Vector3 position, Vector3 impulse, CarObstacleType type, float obstacleSize, EnemyAI enemyScript = null!, bool dealDamage = true)
+    static bool DestroyCar_Prefix(VehicleController __instance, bool __runOriginal)
     {
-        if (__instance is HaulerController hauler)
-        {
-            hauler.CarReactToObstacle(vel, position, impulse, type, obstacleSize, enemyScript, dealDamage);
+        if (!__runOriginal)
             return false;
-        }
-        return true;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.DestroyCar();
+        return false;
     }
 
-    // Custom passenger sit anim replacement (add override)
-    [HarmonyPatch("SetPassengerInCar")]
+    [HarmonyPatch(nameof(VehicleController.ExitDriverSideSeat))]
     [HarmonyPrefix]
-    static void SetPassengerInCar_Postfix(VehicleController __instance, PlayerControllerB player)
+    static bool ExitDriverSideSeat_Prefix(VehicleController __instance, bool __runOriginal)
     {
-        if (__instance is HaulerController hauler)
-        {
-            CompanyHauler.Logger.LogDebug($"true; {hauler == null}");
-            //hauler.ReplacePassengerAnimLocalClient(); // TODO feature
-        }
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        //vehicle.ExitDriverSideSeat();
+        return false;
     }
 
-    // Custom passenger sit anim replacement (undo override)
-    [HarmonyPatch("OnPassengerExit")]
+    [HarmonyPatch(nameof(VehicleController.ExitPassengerSideSeat))]
     [HarmonyPrefix]
-    static void OnPassengerExit_Prefix(VehicleController __instance)
+    static bool ExitPassengerSideSeat_Prefix(VehicleController __instance, bool __runOriginal)
     {
-        if (__instance is HaulerController hauler)
-        {
-            CompanyHauler.Logger.LogDebug($"true; {hauler == null}");
-            //hauler.ReturnPassengerAnimLocalClient(); // TODO feature
-        }
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        //vehicle.ExitPassengerSideSeat();
+        return false;
     }
 
-    // Set the headlight material for the two other LOD meshes
-    // This is a base game oversight. I could easily patch this on Cruiser here, but this is not a cruiser improvements mod.
-    [HarmonyPatch("SetHeadlightMaterial")]
+    [HarmonyPatch(nameof(VehicleController.CarReactToObstacle))]
     [HarmonyPrefix]
-    static void SetHeadlightMaterial_Postfix(VehicleController __instance, bool on)
+    static bool CarReactToObstacle_Prefix(VehicleController __instance, bool __runOriginal, Vector3 vel, Vector3 position, Vector3 impulse, CarObstacleType type, float obstacleSize, EnemyAI enemyScript, bool dealDamage)
     {
-        if (__instance is HaulerController hauler)
-        {
-            Material[] materials = hauler.mainBodyMesh.materials;
-            materials[1] = on ? hauler.headlightsOnMat : hauler.headlightsOffMat;
-            hauler.lod1Mesh.materials = materials;
-            hauler.lod2Mesh.materials = materials;
-        }
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.CarReactToObstacle(vel, position, impulse, type, obstacleSize, enemyScript, dealDamage);
+        return false;
     }
 
-    /// <summary>
-    ///  Available from CruiserImproved, licensed under MIT License.
-    ///  Source: https://github.com/digger1213/CruiserImproved/blob/main/source/Patches/VehicleController.cs
-    /// </summary>
-
-    // Fix radio not changing station for clients
-    [HarmonyPatch("SetRadioStationClientRpc")]
-    [HarmonyPostfix]
-    static void SetRadioStationClientRpc_Postfix(VehicleController __instance)
-    {
-        if (__instance is HaulerController hauler)
-        {
-            __instance.SetRadioOnLocalClient(true, true);
-        }
-    }
-
-    // Set radio time for consistency among owner & clients
-    [HarmonyPatch("SetRadioOnLocalClient")]
-    [HarmonyPostfix]
-    static void SetRadioOnLocalClient_Postfix(VehicleController __instance, bool on, bool setClip)
-    {
-        if (__instance is HaulerController hauler)
-        {
-            if (on && setClip)
-            {
-                hauler.SetRadioTime();
-            }
-        }
-    }
-
-    // Fix radio not turning on for clients unless the channel is changed
-    [HarmonyPatch("SwitchRadio")]
-    [HarmonyPostfix]
-    static void SwitchRadio_Postfix(VehicleController __instance)
-    {
-        if (__instance is HaulerController hauler)
-        {
-            if (__instance.radioOn)
-            {
-                __instance.SetRadioStationServerRpc(__instance.currentRadioClip, (int)Mathf.Round(__instance.radioSignalQuality));
-                hauler.SetRadioTime();
-            }
-        }
-    }
-
-    [HarmonyPatch("SetVehicleAudioProperties")]
+    [HarmonyPatch(nameof(VehicleController.DealPermanentDamage))]
     [HarmonyPrefix]
-    static void SetVehicleAudioProperties_Prefix(VehicleController __instance, AudioSource audio, ref bool audioActive)
+    static bool DealPermanentDamage_Prefix(VehicleController __instance, bool __runOriginal, int damageAmount, Vector3 damagePosition)
     {
-        if (audioActive && ((audio == __instance.extremeStressAudio && __instance.magnetedToShip) || ((audio == __instance.rollingAudio || audio == __instance.skiddingAudio) && (__instance.magnetedToShip || (!__instance.FrontLeftWheel.isGrounded && !__instance.FrontRightWheel.isGrounded && !__instance.BackLeftWheel.isGrounded && !__instance.BackRightWheel.isGrounded)))))
-            audioActive = false;
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.DealPermanentDamage(damageAmount, damagePosition);
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.DamagePlayerInVehicle))]
+    [HarmonyPrefix]
+    static bool DamagePlayerInVehicle_Prefix(VehicleController __instance, bool __runOriginal, Vector3 vel, float magnitude)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.DamagePlayerInVehicle(vel);
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.SetInternalStress))]
+    [HarmonyPrefix]
+    static bool SetInternalStress_Prefix(VehicleController __instance, bool __runOriginal, float carStressIncrease)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.SetInternalStress(carStressIncrease);
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.ToggleHeadlightsLocalClient))]
+    [HarmonyPrefix]
+    static bool ToggleHeadlightsLocalClient_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.ToggleHeadlightsLocalClient();
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.SetHeadlightMaterial))]
+    [HarmonyPrefix]
+    static bool SetHeadlightMaterial_Prefix(VehicleController __instance, bool __runOriginal, bool on)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.SetHeadlightMaterial(on);
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.SpringDriverSeatLocalClient))]
+    [HarmonyPrefix]
+    static bool SpringDriverSeatLocalClient_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.SetRadioOnLocalClient))]
+    [HarmonyPrefix]
+    static bool SetRadioOnLocalClient_Prefix(VehicleController __instance, bool __runOriginal, bool on, bool setClip)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.SetRadioOnLocalClient(on, setClip);
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.SwitchRadio))]
+    [HarmonyPrefix]
+    static bool SwitchRadio_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.SwitchRadio();
+        return false;
+    }
+
+    [HarmonyPatch(nameof(VehicleController.ChangeRadioStation))]
+    [HarmonyPrefix]
+    static bool ChangeRadioStation_Prefix(VehicleController __instance, bool __runOriginal)
+    {
+        if (!__runOriginal)
+            return false;
+
+        if (__instance is not HaulerController vehicle)
+            return true;
+
+        vehicle.ChangeRadioStation();
+        return false;
     }
 }

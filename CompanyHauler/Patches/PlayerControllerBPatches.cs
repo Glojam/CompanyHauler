@@ -1,92 +1,144 @@
-﻿using CompanyHauler.Scripts;
+﻿using CompanyHauler.Networking;
+using CompanyHauler.Scripts;
+using CompanyHauler.Utils;
 using GameNetcodeStuff;
 using HarmonyLib;
+using System.Collections.Generic;
 using UnityEngine;
+
 
 namespace CompanyHauler.Patches;
 
-/// <summary>
-///  Available from CruiserImproved, licensed under MIT License.
-///  Source: https://github.com/digger1213/CruiserImproved/blob/main/source/Patches/PlayerController.cs
-/// </summary>
 [HarmonyPatch(typeof(PlayerControllerB))]
-internal class PlayerControllerPatches
+public static class PlayerControllerBPatches
 {
-    private static bool usingSeatCam = false;
-
-    [HarmonyPatch("Update")]
-    [HarmonyPostfix]
-    public static void Update_Postfix(PlayerControllerB __instance)
+    public class PlayerControllerBData
     {
-        if (__instance != GameNetworkManager.Instance.localPlayerController) return;
- 
-        bool cameraSettingsEnabled = CompanyHauler.BoundConfig.haulerLean.Value;
-        if (!cameraSettingsEnabled) return;
+        public bool playerSeatedInPickup;
+        public bool playerRidingInPickupCab;
+        public bool playerRidingOnPickup;
 
-        Vector3 cameraOffset = Vector3.zero;
+        public bool syncedSeatedInPickup;
+        public bool syncedRidingInPickupCab;
+        public bool syncedRidingOnPickup;
+    }
 
-        // Only do this if its a Hauler
-        bool validHauler = __instance.inVehicleAnimation && __instance.currentTriggerInAnimationWith && __instance.currentTriggerInAnimationWith.overridePlayerParent;
-        if (validHauler && __instance.currentTriggerInAnimationWith.overridePlayerParent.TryGetComponent<HaulerController>(out var controller))
+    public static Dictionary<PlayerControllerB, PlayerControllerBData> playerData = new();
+
+    // optimisation
+    private static Quaternion armsMetarigParentRot = Quaternion.Euler(90f, 0f, 0f);
+    private static Quaternion armsMetarigRot = Quaternion.Euler(-90f, 0f, 0f);
+
+    private static Vector3 localArmsPos = new Vector3(0, -0.008f, -0.43f);
+    private static Quaternion localArmsRot = Quaternion.Euler(84.78056f, 0f, 0f);
+
+    private static Vector3 playerBodyPos = Vector3.zero;
+    private static Quaternion playerBodyRot = Quaternion.Euler(-90, 0, 0);
+
+    private static void RemoveStalePlayerData()
+    {
+        List<PlayerControllerB> playersToRemove = new();
+        foreach (PlayerControllerB player in playerData.Keys)
         {
-            usingSeatCam = true;
-            cameraOffset = new Vector3(0f, 0f, 0f);
-            Vector3 lookFlat = __instance.gameplayCamera.transform.localRotation * Vector3.forward;
-            lookFlat.y = 0;
-            float angleToBack = Vector3.Angle(lookFlat, Vector3.back);
-            if (angleToBack < 70 && CompanyHauler.BoundConfig.haulerLean.Value)
+            if (!player)
             {
-                //If we're looking backwards, offset the camera to the side ('leaning')
-                cameraOffset.x = Mathf.Sign(lookFlat.x) * ((70f - angleToBack) / 70f);
+                playersToRemove.Add(player);
             }
-            __instance.gameplayCamera.transform.localPosition = cameraOffset;
         }
-        else if (!__instance.inVehicleAnimation && usingSeatCam == true)
+
+        foreach (PlayerControllerB player in playersToRemove)
         {
-            //If player is not in the cruiser, reset the camera once
-            usingSeatCam = false;
-            __instance.gameplayCamera.transform.localPosition = Vector3.zero;
+            playerData.Remove(player);
         }
     }
 
-    [HarmonyPatch("LateUpdate")]
+    [HarmonyPatch(nameof(PlayerControllerB.Awake))]
+    [HarmonyPostfix]
+    static void Awake_Postfix(PlayerControllerB __instance)
+    {
+        RemoveStalePlayerData();
+        if (!playerData.ContainsKey(__instance))
+        {
+            PlayerControllerBData thisData = new();
+            playerData.Add(__instance, thisData);
+        }
+    }
+
+    [HarmonyPatch(nameof(PlayerControllerB.UpdatePlayerAnimationsToOtherClients))]
     [HarmonyPrefix]
+    static bool UpdatePlayerAnimationsToOtherClients_Prefix(PlayerControllerB __instance, Vector2 moveInputVector)
+    {
+        if (__instance != GameNetworkManager.Instance.localPlayerController)
+            return true;
+
+        if (PlayerUtils.disableAnimationSync) return false;
+        return true;
+    }
+
+    /// <summary>
+    ///  Available from CruiserImproved, licensed under MIT License.
+    ///  Source: https://github.com/digger1213/CruiserImproved/blob/main/source/Patches/PlayerController.cs
+    /// </summary>
+    [HarmonyPatch(nameof(PlayerControllerB.LateUpdate))]
+    [HarmonyPostfix]
+    public static void LateUpdate_Zone_Postfix(PlayerControllerB __instance)
+    {
+        if (__instance == null ||
+            !__instance.isPlayerControlled ||
+            __instance != GameNetworkManager.Instance.localPlayerController)
+        {
+            return;
+        }
+        SetPlayerVehicleZone(__instance);
+    }
+
+    private static void SetPlayerVehicleZone(PlayerControllerB playerController)
+    {
+        HaulerController haulerController = References.pickupController;
+
+        var localPlayerData = playerData[playerController];
+        bool sittingInPickup = PlayerUtils.isSeatedInPickup;
+        bool ridingInPickupCab = haulerController?.vehicleCabZone.playerInZone ?? false;
+        bool ridingOnPickup = haulerController?.vehicleZone.playerInZone ?? false;
+
+        if (localPlayerData.playerSeatedInPickup == sittingInPickup &&
+            localPlayerData.playerRidingInPickupCab == ridingInPickupCab &&
+            localPlayerData.playerRidingOnPickup == ridingOnPickup)
+        {
+            return;
+        }
+
+        localPlayerData.playerSeatedInPickup = sittingInPickup;
+        localPlayerData.playerRidingInPickupCab = ridingInPickupCab;
+        localPlayerData.playerRidingOnPickup = ridingOnPickup;
+        HaulerNetworker.Instance?.SyncPlayerZoneRpc(playerController.NetworkObject,
+                                                 sittingInPickup,
+                                                 ridingInPickupCab,
+                                                 ridingOnPickup);
+    }
+
+    [HarmonyPatch(nameof(PlayerControllerB.LateUpdate))]
+    [HarmonyPostfix]
     private static void LateUpdate_Postfix(PlayerControllerB __instance)
     {
-        if (!__instance.isPlayerControlled)
-            return;
-
-        if (__instance.isPlayerDead)
-            return;
-
-        bool validTruck = __instance.inVehicleAnimation &&
-            __instance.currentTriggerInAnimationWith &&
-            __instance.currentTriggerInAnimationWith.overridePlayerParent;
-
-        if (validTruck &&
-            __instance.currentTriggerInAnimationWith.overridePlayerParent.TryGetComponent<HaulerController>(out var controller))
+        if (__instance == null ||
+            __instance.isPlayerDead ||
+            !__instance.isPlayerControlled)
         {
-            // fix players first-person arms orientation after interacting with certain objects (i.e. terminal, start round lever) causing visual issues such as the ignition-key animation being off
-            __instance.playerModelArmsMetarig.parent.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            __instance.playerModelArmsMetarig.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-            __instance.localArmsTransform.localPosition = new Vector3(0, -0.008f, -0.43f);
-            __instance.localArmsTransform.localRotation = Quaternion.Euler(84.78056f, 0f, 0f);
-            __instance.playerBodyAnimator.transform.localPosition = new Vector3(0, 0f, 0f);
-            __instance.playerBodyAnimator.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+            return;
         }
-    }
 
-    [HarmonyPatch("PlaceGrabbableObject")]
-    [HarmonyPostfix]
-    static void PlaceGrabbableObject_Postfix(GrabbableObject placeObject)
-    {
-        ScanNodeProperties scanNode = placeObject.GetComponentInChildren<ScanNodeProperties>();
-
-        // add rigidbody to the scanNode so it'll be scannable when attached to the cruiser
-        if (scanNode && !scanNode.GetComponent<Rigidbody>())
+        if (!__instance.inVehicleAnimation || 
+            !playerData[__instance].playerSeatedInPickup)
         {
-            var rb = scanNode.gameObject.AddComponent<Rigidbody>();
-            rb.isKinematic = true;
+            return;
         }
+
+        __instance.playerModelArmsMetarig.parent.transform.localRotation = armsMetarigParentRot;
+        __instance.playerModelArmsMetarig.localRotation = armsMetarigRot;
+        __instance.localArmsTransform.localPosition = localArmsPos;
+        __instance.localArmsTransform.localRotation = localArmsRot;
+        __instance.playerBodyAnimator.transform.localPosition = playerBodyPos;
+        __instance.playerBodyAnimator.transform.localRotation = playerBodyRot;
     }
 }

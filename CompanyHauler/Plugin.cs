@@ -1,29 +1,28 @@
 using BepInEx;
+using BepInEx.Bootstrap;
 using BepInEx.Logging;
+using CompanyHauler.Compatibility;
+using CompanyHauler.Networking;
 using HarmonyLib;
-using System.Reflection;
-using UnityEngine;
 
 namespace CompanyHauler;
 
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
-public class CompanyHauler : BaseUnityPlugin
+[BepInDependency("scandal.scandalstweaks", BepInDependency.DependencyFlags.HardDependency)]
+public class Plugin : BaseUnityPlugin
 {
-    public static CompanyHauler Instance { get; private set; } = null!;
+    public static Plugin Instance { get; private set; } = null!;
     internal new static ManualLogSource Logger { get; private set; } = null!;
     internal static Harmony? Harmony { get; set; }
-    internal static HaulerConfig BoundConfig { get; private set; } = null!;
 
     public void Awake()
     {
         Logger = base.Logger;
         Instance = this;
 
-        BoundConfig = new HaulerConfig(base.Config);
+        HaulerConfig.InitConfig();
 
-        NetcodePatcher();
         Patch();
-
         Logger.LogInfo($"{MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION} has loaded!");
     }
 
@@ -34,6 +33,9 @@ public class CompanyHauler : BaseUnityPlugin
         Logger.LogDebug("Patching...");
 
         Harmony.PatchAll();
+
+        if (IsModPresent("NoteBoxz.LethalMin")) LethalMinCompatibility.PatchAllCompatibilityMethods(Harmony);
+        if (IsModPresent("ImmersiveVisor")) ImmersiveVisorCompatibility.PatchAllCompatibilityMethods(Harmony);
 
         Logger.LogDebug("Finished patching!");
     }
@@ -47,20 +49,8 @@ public class CompanyHauler : BaseUnityPlugin
         Logger.LogDebug("Finished unpatching!");
     }
 
-    private void NetcodePatcher()
+    internal static bool IsModPresent(string name)
     {
-        var types = Assembly.GetExecutingAssembly().GetTypes();
-        foreach (var type in types)
-        {
-            var methods = type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            foreach (var method in methods)
-            {
-                var attributes = method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false);
-                if (attributes.Length > 0)
-                {
-                    method.Invoke(null, null);
-                }
-            }
-        }
+        return Chainloader.PluginInfos.ContainsKey(name);
     }
 }
