@@ -19,6 +19,7 @@ https://thunderstore.io/c/lethal-company/p/Glojam/Company_Hauler/
 * Other things...?
 
 ## Pictures
+
 ![Front angle of the Hauler](https://i.imgur.com/4vCCw10.png)
 ![Bed view of the Hauler](https://i.imgur.com/VedpSzy.png)
 ![Cab view](https://i.imgur.com/9AISuBJ.png)
