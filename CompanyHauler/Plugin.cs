@@ -20,7 +20,7 @@ public class Plugin : BaseUnityPlugin
         Logger = base.Logger;
         Instance = this;
 
-        HaulerConfig.InitConfig();
+        UserConfig.InitConfig();
 
         Patch();
         Logger.LogInfo($"{MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION} has loaded!");

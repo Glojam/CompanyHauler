@@ -5,10 +5,13 @@ using HarmonyLib;
 
 namespace CompanyHauler;
 
-internal class HaulerConfig
+internal class UserConfig
 {
     // General
     internal static ConfigEntry<bool> haulerMirror = null!;
+
+    // QOL
+    internal static ConfigEntry<bool> RecenterWheel = null!;
 
     internal static void InitConfig()
     {
@@ -17,6 +20,9 @@ internal class HaulerConfig
 
         // General
         haulerMirror = config.Bind("General", "Enable Mirrors", true, "Enable rendering for the side mirrors? (may impact performance for low end hardware)");
+
+        // QOL
+        RecenterWheel = config.Bind("Quality Of Life", "Automatically Center Wheel", false, "Should the wheel be automatically re-centered?");
 
         ClearOrphanedEntries(config);
         config.Save();

@@ -121,6 +121,10 @@ public class HaulerCollisionTrigger : MonoBehaviour
                 return;
             }
 
+            // disallow killing the fox
+            if (enemyAIcollision.mainScript is BushWolfEnemy)
+                return;
+
             // prevent tulip-snakes bouncing the vehicle if actively clinging to a player
             if (enemyAIcollision.mainScript is FlowerSnakeEnemy flowerSnake && flowerSnake.clingingToPlayer)
                 return;

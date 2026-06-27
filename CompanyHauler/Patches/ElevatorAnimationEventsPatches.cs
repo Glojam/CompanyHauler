@@ -19,6 +19,6 @@ public static class ElevatorAnimationEventsPatches
         // save players who are on the magneted pickup from being abandoned
         PlayerControllerB localPlayer = GameNetworkManager.Instance.localPlayerController;
         if (VehicleUtils.IsPlayerInPickupBounds(controller))
-            localPlayer.isInElevator = false;
+            localPlayer.isInElevator = true;
     }
 }

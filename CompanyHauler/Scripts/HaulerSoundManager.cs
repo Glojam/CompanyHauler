@@ -33,7 +33,7 @@ public class HaulerSoundManager : MonoBehaviour
         }
 
         var perspectiveData = PlayerControllerBPatches.playerData[perspectivePlayer];
-        bool perspectiveInCab = perspectiveData?.playerRidingInPickupCab == true;
+        bool perspectiveInCab = perspectiveData?.playerRidingInPickupCab ?? false;
         controller.roofRainAudioActive = GlobalUtilities.IsItRaining() && perspectiveInCab;
     }
 }

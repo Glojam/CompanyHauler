@@ -1,10 +1,10 @@
-﻿using CompanyHauler.Patches;
-using CompanyHauler.Scripts;
+﻿using CompanyHauler.Scripts;
 using CompanyHauler.Utils;
 using GameNetcodeStuff;
 using HarmonyLib;
 using ScandalsTweaks.Patches;
 using ScandalsTweaks.Utils;
+using ScandalsTweaks.Compatibility;
 
 namespace CompanyHauler.Patches.InternalUtils;
 
@@ -16,7 +16,20 @@ public static class ScandalsTweaksPatches
         if (PlayerControllerBPatches.playerData[player].playerSeatedInPickup ||
             PlayerControllerBPatches.playerData[player].playerRidingInPickupCab)
             return true;
+
         return false;
+    }
+
+    [HarmonyPatch(typeof(JLLCompatibility), nameof(JLLCompatibility.CanPlayerBeBlown))]
+    [HarmonyPrefix]
+    private static bool CanPlayerBeBlown_Prefix(PlayerControllerB player, ref bool __result)
+    {
+        if (IsPlayerInPickup(player))
+        {
+            __result = false;
+            return false;
+        }
+        return true;
     }
 
     [HarmonyPatch(typeof(GlobalUtilities), nameof(GlobalUtilities.ShouldAllowSightForVehicle))]

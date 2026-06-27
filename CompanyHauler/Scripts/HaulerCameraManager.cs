@@ -46,7 +46,7 @@ public class HaulerCameraManager : MonoBehaviour
             cameraMirrors[j].enabled = false;
         }
 
-        if (!HaulerConfig.haulerMirror.Value ||
+        if (!UserConfig.haulerMirror.Value ||
             !PlayerUtils.isSeatedInPickup)
         {
             leftMirrorMesh.enabled = false;

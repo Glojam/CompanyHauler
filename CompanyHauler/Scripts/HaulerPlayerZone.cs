@@ -4,14 +4,15 @@ using UnityEngine;
 
 namespace CompanyHauler.Scripts;
 
-// A stripped down version of the HaulerPhysicsRegion, this is just used for the cabin space to determine whether a player is simply just "standing in the cab"
-// Ignores seated players.
 public class HaulerPlayerZone : MonoBehaviour
 {
     public HaulerController haulerController = null!;
 
     public Transform physicsTransform = null!;
     public Collider physicsCollider = null!;
+
+    private float playerInsideInterval;
+    private bool playerInsideThisFrame;
 
     private bool removePlayerFromZoneNextFrame;
     private float checkZoneInterval;
@@ -23,7 +24,7 @@ public class HaulerPlayerZone : MonoBehaviour
     public bool disableZone;
 
 
-    private void OnEnable()
+    public void OnEnable()
     {
         if (setInZoneWhileSeated && unsetInZoneWhileSeated)
         {
@@ -41,12 +42,12 @@ public class HaulerPlayerZone : MonoBehaviour
         }
     }
 
-    private void OnDestroy()
+    public void OnDestroy()
     {
         disableZone = true;
     }
 
-    private void OnTriggerStay(Collider other)
+    public void OnTriggerStay(Collider other)
     {
         if (disableZone)
         {
@@ -57,7 +58,7 @@ public class HaulerPlayerZone : MonoBehaviour
         {
             return;
         }
-        if (VehicleUtils.IsPlayerSeatedInPickup())
+        if (!other.gameObject.CompareTag("Player"))
         {
             return;
         }
@@ -65,17 +66,15 @@ public class HaulerPlayerZone : MonoBehaviour
         {
             return;
         }
-        playerInZone = true;
-        removePlayerFromZoneNextFrame = false;
-        checkZoneInterval = 0f;
+        playerInsideThisFrame = true;
+        playerInsideInterval = 0f;
     }
 
 
-    private void Update()
+    public void Update()
     {
         if (disableZone)
         {
-            playerInZone = false;
             return;
         }
         if (VehicleUtils.IsPlayerSeatedInPickup())
@@ -83,39 +82,68 @@ public class HaulerPlayerZone : MonoBehaviour
             if (setInZoneWhileSeated)
             {
                 playerInZone = true;
-                removePlayerFromZoneNextFrame = false;
-                checkZoneInterval = 0f;
-                return;
             }
             else if (unsetInZoneWhileSeated)
             {
                 playerInZone = false;
-                removePlayerFromZoneNextFrame = false;
-                checkZoneInterval = 0f;
-                return;
             }
+            removePlayerFromZoneNextFrame = false;
+            checkZoneInterval = 0f;
+            return;
         }
-        SetRemoval(ref checkZoneInterval, ref removePlayerFromZoneNextFrame, ref playerInZone);
+        UpdatePlayerZone();
+        SetPlayerZone(ref checkZoneInterval, ref removePlayerFromZoneNextFrame, ref playerInZone);
     }
 
-    private void SetRemoval(ref float checksInterval, ref bool nextFrame, ref bool setPlayer)
+    public void UpdatePlayerZone()
     {
-        if (!setPlayer)
+        //if (Time.time - lastPhysicsTime <= 0.15f)
+        //{
+        //    SetPlayerZoneActive();
+        //}
+        if (!playerInsideThisFrame)
         {
             return;
         }
-        if (checksInterval <= 0.15f)
+        //playerInsideThisLastFrame = playerInsideThisFrame;
+        if (playerInsideThisFrame)
         {
-            checksInterval += Time.deltaTime;
+            SetPlayerZoneActive();
+        }
+        if (playerInsideInterval <= 0.15f)
+        {
+            playerInsideInterval += Time.deltaTime;
             return;
         }
-        if (!nextFrame)
+        playerInsideThisFrame = false;
+        playerInsideInterval = 0f;
+    }
+
+    private void SetPlayerZoneActive()
+    {
+        checkZoneInterval = 0f;
+        removePlayerFromZoneNextFrame = false;
+        playerInZone = true;
+    }
+
+    public void SetPlayerZone(ref float checkInterval, ref bool removeNextFrame, ref bool hasPlayer)
+    {
+        if (!hasPlayer)
         {
-            nextFrame = true;
             return;
         }
-        nextFrame = false;
-        checksInterval = 0f;
-        setPlayer = false;
+        if (checkInterval <= 0.15f)
+        {
+            checkInterval += Time.deltaTime;
+            return;
+        }
+        if (!removeNextFrame)
+        {
+            removeNextFrame = true;
+            return;
+        }
+        removeNextFrame = false;
+        checkInterval = 0f;
+        hasPlayer = false;
     }
 }

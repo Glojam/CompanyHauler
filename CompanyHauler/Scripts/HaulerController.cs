@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using CompanyHauler.Utils;
@@ -25,6 +26,8 @@ public class HaulerController : VehicleController
 
     [Header("Networking")]
 
+    private bool receivedSyncData;
+
     public Vector2 syncedMoveInputVector;
     public bool syncedDrivePedalPressed;
     public bool syncedBrakePedalPressed;
@@ -46,6 +49,8 @@ public class HaulerController : VehicleController
     internal float syncedSteeringWheelRotation;
     internal float syncedCurrentMotorTorque;
     internal float syncedCurrentBrakeTorque;
+
+    private float syncedSongTime;
 
     [Header("Player")]
 
@@ -374,7 +379,7 @@ public class HaulerController : VehicleController
         backDoorOpen = true; // hacky shit
         base.Awake();
 
-        physicsRegion.priority = 1;
+        vehicleZone.priority = 1;
         syncedPosition = transform.position;
         syncedRotation = transform.rotation;
 
@@ -393,7 +398,7 @@ public class HaulerController : VehicleController
     {
         StartCoroutine(SetCarRainCollisions());
         if (maxBrakeTorque > maxParkingBrakeTorque)
-            maxBrakeTorque = maxParkingBrakeTorque;
+            maxBrakeTorque = maxParkingBrakeTorque - 100f;
         carHP = baseCarHP;
 
         FrontLeftWheel.brakeTorque = maxParkingBrakeTorque;
@@ -417,6 +422,67 @@ public class HaulerController : VehicleController
         transform.position = StartOfRound.Instance.magnetPoint.position + StartOfRound.Instance.magnetPoint.forward * 7f;
         StartMagneting();
     }
+
+    // --- SYNC DATA ---
+    public void SendClientSyncData()
+    {
+        if (magnetedToShip)
+        {
+            Vector3 eulerAngles = magnetTargetRotation.eulerAngles;
+            MagnetCarRpc(magnetTargetPosition, eulerAngles, magnetStartPosition, magnetStartRotation, RoundManager.Instance.tempTransform.eulerAngles, averageVelocityAtMagnetStart);
+        }
+        /*
+        ReceiveClientSyncDataRpc(
+            setIgnition: ignitionStarted, setKeyInSlot: keyIsInIgnition, setAccessories: accessoryMode,
+            setWindshield: windshieldBroken,
+            setSunroof: sunroofOpen,
+            setTailgate: tailgateOpen,
+            setFrontLeftDoor: driverSideDoor.boolValue, setFrontRightDoor: passengerSideDoor.boolValue,
+            setBackLeftDoor: backLeftDoor.boolValue, setBackRightDoor: backRightDoor.boolValue,
+            setFrontLeftWindow: frontLeftWindow.windowOpen, setFrontRightWindow: frontRightWindow.windowOpen,
+            setBackLeftWindow: backLeftWindow.windowOpen, setBackRightWindow: backRightWindow.windowOpen,
+            setHood: carHoodOpen,
+            setSteering: steeringWheelAnimFloat, setPlayerSteering: playerSteeringWheelAnimFloat,
+            carHealth: carHP,
+            setCabinLight: frontCabinLightContainer.activeSelf,
+            setCabinLightSwitch: cabLightToggled);
+        */
+    }
+
+    /*
+    [Rpc(SendTo.NotMe, RequireOwnership = false)]
+    public void ReceiveClientSyncDataRpc(
+        bool setIgnition, bool setKeyInSlot, bool setAccessories, 
+        bool setWindshield, 
+        bool setSunroof,
+        bool setTailgate, 
+        bool setFrontLeftDoor, bool setFrontRightDoor, 
+        bool setBackLeftDoor, bool setBackRightDoor, 
+        bool setFrontLeftWindow, bool setFrontRightWindow,
+        bool setBackLeftWindow, bool setBackRightWindow,
+        bool setHood, 
+        float setSteering, float setPlayerSteering,
+        int carHealth,
+        bool setCabinLight,
+        bool setCabinLightSwitch)
+    {
+        if (receivedSyncData)
+        {
+            return;
+        }
+        receivedSyncData = true;
+        keyIsInIgnition = setKeyInSlot;
+        hasPlayedIgnitionChime = setAccessories;
+        SetDashboardGaugesOn(on: accessoryMode);
+        cabLightToggled = setCabinLightSwitch;
+        SetIgnition(started: setIgnition, cabLightOn: setCabinLight);
+        if (setWindshield) BreakWindshield();
+        //if (setSunroof && sunroofContainer.TryGetComponent<AnimatedObjectTrigger>(out var sunroofEvent))
+        //{
+        //    sunroofEvent.TriggerAnimation();
+        //}
+    }
+    */
 
     public IEnumerator SetCarRainCollisions()
     {
@@ -610,8 +676,8 @@ public class HaulerController : VehicleController
         SetDashboardGaugesOn(on: true);
         TryStartIgnitionRpc(shiftInterlock);
         if (!shiftInterlock) yield break;
-        yield return new WaitForSeconds(Random.Range(0.7f, 1.4f));
-        if ((float)Random.Range(0, 100) < chanceToStartIgnition)
+        yield return new WaitForSeconds(UnityEngine.Random.Range(0.7f, 1.4f));
+        if ((float)UnityEngine.Random.Range(0, 100) < chanceToStartIgnition)
         {
             inIgnitionAnimation = false;
             accessoryMode = true;
@@ -685,12 +751,9 @@ public class HaulerController : VehicleController
     {
         if (!localPlayerInControl ||
             ignitionStarted ||
-            keyIgnitionCoroutine == null)
+            keyIgnitionCoroutine == null ||
+            (keyIgnitionCoroutine == null && startIgnitionTrigger.isBeingHeldByPlayer))
             return;
-
-        CancelIgnitionAnimation(ignitionOn: false, setIgnitionAnim: false);
-        disableAnimations = true;
-        inIgnitionAnimation = false;
 
         // hopefully fix a bug where the wrong animation can play?
         PlayerControllerB localPlayer = GameNetworkManager.Instance.localPlayerController;
@@ -699,12 +762,12 @@ public class HaulerController : VehicleController
         else if (localPlayer.playerBodyAnimator.GetInteger(CAR_ANIM) == 12 && keyIsInIgnition)
             localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, 3);
         else
-        {
-            if (localPlayer.playerBodyAnimator.GetInteger(CAR_ANIM) == 0 && keyIsInIgnition)
-                localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, 13); // an extra transition state to go from sitting --> untwist quickly
-            else
-                localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, keyIsInIgnition ? 3 : 0);
-        }
+            localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+
+        CancelIgnitionAnimation(ignitionOn: false, setIgnitionAnim: false);
+        disableAnimations = true;
+        inIgnitionAnimation = false;
+
         int playerAnimIndex = localPlayer.playerBodyAnimator.GetInteger(CAR_ANIM);
         int ignitionAnimIndex = playerAnimIndex;
         if (playerAnimIndex == 13) ignitionAnimIndex = 3;
@@ -1601,6 +1664,16 @@ public class HaulerController : VehicleController
 
         drivePedalPressed = moveInputVector.y > 0.1f && shiftGearCoroutine == null;
         brakePedalPressed = moveInputVector.y < -0.1f;
+
+        float avgSpeed = averageVelocity.magnitude;
+        if (avgSpeed < 0.5f)
+        {
+            return;
+        }
+
+        float autoCenterSpeed = Mathf.Clamp01(avgSpeed / 8f);
+        if (moveInputVector.x == 0f && UserConfig.RecenterWheel.Value)
+            steeringWheelAnimFloat = NormaliseFloat(Mathf.MoveTowards(steeringWheelAnimFloat, 0f, steeringWheelTurnSpeed * autoCenterSpeed * Time.deltaTime / 6f));
     }
 
     private void SyncVehicleInput()
@@ -1690,7 +1763,7 @@ public class HaulerController : VehicleController
         mainRigidbody.maxAngularVelocity = 4f;
 
         mainRigidbody.automaticCenterOfMass = false;
-        mainRigidbody.centerOfMass = new Vector3(0f, -0.2f, 0.7f); // more biased towards the front, loose rear end
+        mainRigidbody.centerOfMass = new Vector3(0f, -0.25f, 0.7f); // more biased towards the front, loose rear end
         mainRigidbody.automaticInertiaTensor = false;
 
         speed = 55;
@@ -1713,7 +1786,10 @@ public class HaulerController : VehicleController
         carHitPlayerForceFraction = 30f;
         carReactToPlayerHitMultiplier = 2850f;
 
-        jumpForce = 5250f;
+        turboBoostForce = 12000f;
+        turboBoostUpwardForce = 28800f;
+
+        jumpForce = 5600f;
         pushForceMultiplier = 78f;
         pushVerticalOffsetAmount = 1.1f;
         steeringWheelTurnSpeed = 4.35f;
@@ -2067,6 +2143,12 @@ public class HaulerController : VehicleController
             radioScreen.text = null!;
             return;
         }
+        if (RoundManager.Instance.currentLevel != null && 
+            !RoundManager.Instance.currentLevel.planetHasTime)
+        {
+            radioScreen.text = DateTime.Now.ToString("h:mm tt"); // users computer time
+            return;
+        }
         radioScreen.text = HUDManager.Instance.clockNumber.text.Trim().Replace("\n", " "); // current in-game time
     }
 
@@ -2313,16 +2395,32 @@ public class HaulerController : VehicleController
 
     // --- RADIO TIME SYNC ---
     [Rpc(SendTo.NotServer, RequireOwnership = false)]
-    public void SyncRadioTimeRpc(float songTime)
+    public void SyncRadioTimeRpc(float songTime, float syncedTime, float staticTime)
     {
         currentSongTime = songTime;
+        syncedSongTime = syncedTime;
+        timeLastSyncedRadio = Time.realtimeSinceStartup;
         SetRadioTime();
+        SetRadioStaticTime(staticTime);
     }
 
     public void SetRadioTime()
     {
         if (radioAudio.clip == null || !radioOn) return;
-        radioAudio.time = Mathf.Clamp(currentSongTime % radioAudio.clip.length, 0f, radioAudio.clip.length);
+        float setTime = (syncedSongTime + (Time.realtimeSinceStartup - timeLastSyncedRadio)) % radioAudio.clip.length;
+        if (Mathf.Abs(setTime - radioAudio.time) > 1f)
+        {
+            radioAudio.time = setTime;
+        }
+    }
+
+    public void SetRadioStaticTime(float staticTime)
+    {
+        float setTime = (staticTime + (Time.realtimeSinceStartup - timeLastSyncedRadio)) % radioInterference.clip.length;
+        if (Mathf.Abs(setTime - radioInterference.time) > 1f)
+        {
+            radioInterference.time = setTime;
+        }
     }
 
 
@@ -2341,28 +2439,28 @@ public class HaulerController : VehicleController
                 radioSignalQuality = 3f;
                 radioSignalDecreaseThreshold = 90f;
                 break;
-
             case 1:
                 radioSignalQuality = 2f;
                 radioSignalDecreaseThreshold = 70f;
                 break;
-
             case 2:
                 radioSignalQuality = 1f;
                 radioSignalDecreaseThreshold = 30f;
                 break;
-
             case 3:
                 radioSignalQuality = 1f;
                 radioSignalDecreaseThreshold = 10f;
                 break;
         }
         SetRadioOnLocalClient(on: true, setClip: true);
-        SetRadioStationRpc(currentRadioClip, radioSignalQuality, radioSignalDecreaseThreshold);
+        float setTime = Mathf.Clamp(currentSongTime % radioAudio.clip.length, 0.01f, radioAudio.clip.length - 0.1f);
+        timeLastSyncedRadio = Time.realtimeSinceStartup;
+        radioAudio.time = setTime;
+        SetRadioStationRpc(currentRadioClip, setTime, radioSignalQuality, radioSignalDecreaseThreshold);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
-    public void SetRadioStationRpc(int radioStation, float signalQuality, float signalDecrease)
+    public void SetRadioStationRpc(int radioStation, float setTime, float signalQuality, float signalDecrease)
     {
         if (radioClips.Length == 0)
         {
@@ -2373,10 +2471,12 @@ public class HaulerController : VehicleController
         radioSignalQuality = signalQuality;
         radioSignalDecreaseThreshold = signalDecrease;
         SetRadioOnLocalClient(on: true, setClip: true);
+        timeLastSyncedRadio = Time.realtimeSinceStartup;
+        radioAudio.time = setTime;
     }
 
 
-    // --- RADIO TOGGLE ---
+    // --- RADIO TOGGLE --- 
     public new void SwitchRadio()
     {
         if (radioClips.Length == 0)
@@ -2385,11 +2485,14 @@ public class HaulerController : VehicleController
             return;
         }
         SetRadioOnLocalClient(on: !radioOn, setClip: false);
-        SetRadioRpc(radioOn, currentRadioClip, radioSignalQuality, radioSignalDecreaseThreshold);
+        float setTime = Mathf.Clamp(currentSongTime % radioAudio.clip.length, 0.01f, radioAudio.clip.length - 0.1f);
+        timeLastSyncedRadio = Time.realtimeSinceStartup;
+        radioAudio.time = setTime;
+        SetRadioRpc(radioOn, currentRadioClip, setTime, radioSignalQuality, radioSignalDecreaseThreshold);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
-    public void SetRadioRpc(bool on, int radioStation, float signalQuality, float signalDecrease)
+    public void SetRadioRpc(bool setRadioOn, int radioStation, float setTime, float signalQuality, float signalDecrease)
     {
         if (radioClips.Length == 0)
         {
@@ -2399,37 +2502,40 @@ public class HaulerController : VehicleController
         currentRadioClip = radioStation;
         radioSignalQuality = signalQuality;
         radioSignalDecreaseThreshold = signalDecrease;
-        SetRadioOnLocalClient(on: on, setClip: false);
+        SetRadioOnLocalClient(on: setRadioOn, setClip: false);
+        timeLastSyncedRadio = Time.realtimeSinceStartup;
+        radioAudio.time = setTime;
     }
 
 
     // --- RADIO VALUES ---
     public new void SetRadioValues()
     {
+        if (IsServer && radioTurnedOnBefore)
+        {
+            currentSongTime += Time.deltaTime;
+            if (Time.realtimeSinceStartup - timeLastSyncedRadio > 1f)
+            {
+                timeLastSyncedRadio = Time.realtimeSinceStartup;
+                syncedSongTime = radioAudio.time;
+                SyncRadioTimeRpc(currentSongTime, syncedSongTime, radioInterference.time);
+            }
+        }
         if (!radioOn || radioAudio.clip == null)
         {
             if (radioAudio.isPlaying) radioAudio.Stop();
             if (radioInterference.isPlaying) radioInterference.Stop();
-            if (currentSongTime > 0f) currentSongTime = 0f;
             return;
         }
-        if (IsServer)
+        if (!radioTurnedOnBefore) radioTurnedOnBefore = true;
+        if (radioAudio.isPlaying && Time.realtimeSinceStartup > radioPingTimestamp)
         {
-            currentSongTime = radioAudio.time;
-            if (Time.realtimeSinceStartup - timeLastSyncedRadio > 1f)
-            {
-                timeLastSyncedRadio = Time.realtimeSinceStartup;
-                SyncRadioTimeRpc(currentSongTime);
-            }
-            if (radioAudio.isPlaying && Time.realtimeSinceStartup > radioPingTimestamp)
-            {
-                radioPingTimestamp = (Time.realtimeSinceStartup + 1f);
-                RoundManager.Instance.PlayAudibleNoise(radioAudio.transform.position, 16f, Mathf.Min((radioAudio.volume + radioInterference.volume) * 0.5f, 0.9f), 0, false, 2692);
-            }
+            radioPingTimestamp = (Time.realtimeSinceStartup + 1f);
+            RoundManager.Instance.PlayAudibleNoise(radioAudio.transform.position, 16f, Mathf.Min((radioAudio.volume + radioInterference.volume) * 0.5f, 0.9f), 0, false, 106217);
         }
         if (IsOwner)
         {
-            float random = Random.Range(0, 100);
+            float random = UnityEngine.Random.Range(0, 100);
             float radioSignal = (3f - radioSignalQuality - 1.5f) * radioSignalTurbulence;
             radioSignalDecreaseThreshold = Mathf.Clamp(radioSignalDecreaseThreshold + Time.deltaTime * radioSignal, 0f, 100f);
             if (random > radioSignalDecreaseThreshold)
@@ -2443,7 +2549,7 @@ public class HaulerController : VehicleController
             if (Time.realtimeSinceStartup - changeRadioSignalTime > 0.3f)
             {
                 changeRadioSignalTime = Time.realtimeSinceStartup;
-                if (radioSignalQuality < 1.2f && Random.Range(0, 100) < 6)
+                if (radioSignalQuality < 1.2f && UnityEngine.Random.Range(0, 100) < 6)
                 {
                     radioSignalQuality = Mathf.Min(radioSignalQuality + 1.5f, 3f);
                     radioSignalDecreaseThreshold = Mathf.Min(radioSignalDecreaseThreshold + 30f, 100f);
@@ -2481,7 +2587,7 @@ public class HaulerController : VehicleController
 
     public new void SetRadioOnLocalClient(bool on, bool setClip = true)
     {
-        Plugin.Logger.LogDebug($"Hauler: Radio called with on? {on}, setClip? {setClip}");
+        Plugin.Logger.LogDebug($"Hauler: Radio called with setRadioOn? {on}, setClip? {setClip}");
         radioOn = on;
         if (on)
         {
@@ -2491,8 +2597,6 @@ public class HaulerController : VehicleController
                 radioAudio.clip = radioClips[currentRadioClip];
                 Plugin.Logger.LogDebug($"Hauler: Set radio clip to {currentRadioClip}, station? {radioAudio.clip.name}");
             }
-            currentSongTime = 0f;
-            SetRadioTime();
             radioAudio.Play();
             radioInterference.Play();
             return;
@@ -2535,12 +2639,13 @@ public class HaulerController : VehicleController
                 return false;
             case CarObstacleType.Enemy:
                 {
+                    float enemyHitSpeed;
                     if (obstacleSize <= 1f)
                     {
-                        return false;
+                        enemyHitSpeed = 2f;
+                        _ = carReactToPlayerHitMultiplier;
                     }
-                    float enemyHitSpeed;
-                    if (obstacleSize <= 2f)
+                    else if (obstacleSize <= 2f)
                     {
                         enemyHitSpeed = 9f;
                         _ = carReactToPlayerHitMultiplier;
@@ -2651,6 +2756,7 @@ public class HaulerController : VehicleController
             {
                 DestroyCarRpc();
                 DestroyCar();
+                timeSinceLastCollision = Time.realtimeSinceStartup;
                 return;
             }
 
@@ -2663,6 +2769,7 @@ public class HaulerController : VehicleController
             CarCollisionRpc(Vector3.ClampMagnitude(-collision.relativeVelocity, 60f));
             BreakWindshield();
             timeSinceLastCollision = Time.realtimeSinceStartup + 0.25f;
+            return;
         }
 
         if (collisionImpulse >= minimalBumpForce && collisionImpulse < mediumBumpForce &&
@@ -2670,21 +2777,21 @@ public class HaulerController : VehicleController
         {
             audioType = 0;
             collisionVolume = Mathf.Clamp((collisionImpulse - minimalBumpForce) / (mediumBumpForce - minimalBumpForce), 0.25f, 1f);
-            collisionVolume = Mathf.Clamp(collisionVolume + Random.Range(-0.15f, 0.25f), 0.25f, 1f);
+            collisionVolume = Mathf.Clamp(collisionVolume + UnityEngine.Random.Range(-0.15f, 0.25f), 0.25f, 1f);
         }
         else if (collisionImpulse >= mediumBumpForce && collisionImpulse < maximumBumpForce &&
             averageVelocity.magnitude > 6f)
         {
             audioType = 1;
             collisionVolume = Mathf.Clamp((collisionImpulse - mediumBumpForce) / (maximumBumpForce - mediumBumpForce), 0.67f, 1f);
-            collisionVolume = Mathf.Clamp(collisionVolume + Random.Range(-0.15f, 0.25f), 0.5f, 1f);
+            collisionVolume = Mathf.Clamp(collisionVolume + UnityEngine.Random.Range(-0.15f, 0.25f), 0.5f, 1f);
         }
         else if (collisionImpulse >= maximumBumpForce &&
             averageVelocity.magnitude > 12f)
         {
             audioType = 2;
             collisionVolume = Mathf.Clamp((collisionImpulse - maximumBumpForce) / 20000f, 0.8f, 1f);
-            collisionVolume = Mathf.Clamp(collisionVolume + Random.Range(-0.15f, 0.25f), 0.7f, 1f);
+            collisionVolume = Mathf.Clamp(collisionVolume + UnityEngine.Random.Range(-0.15f, 0.25f), 0.7f, 1f);
             DealPermanentDamage(1);
             timeSinceLastCollision = Time.realtimeSinceStartup + 0.2f;
         }
@@ -2787,8 +2894,18 @@ public class HaulerController : VehicleController
         glassParticle.Play();
         windshieldBroken = true;
         windshieldMesh.enabled = false;
-        windowWipersEvent.enabled = false;
+        //windowWipersEvent.enabled = false;
         windshieldAudio.PlayOneShot(windshieldBreak);
+    }
+
+    private void RegenerateWindshield()
+    {
+        if (!windshieldBroken)
+            return;
+
+        windshieldBroken = false;
+        windshieldMesh.enabled = true;
+        //windowWipersEvent.enabled = true;
     }
 
     public new void PlayCollisionAudio(Vector3 setPosition, int audioType, float setVolume)
@@ -2864,16 +2981,16 @@ public class HaulerController : VehicleController
                 break;
         }
 
-        AudioClip chosenClip = selectedClips[Random.Range(0, selectedClips.Length)];
+        AudioClip chosenClip = selectedClips[UnityEngine.Random.Range(0, selectedClips.Length)];
 
-        if (chosenClip == source.clip && Random.Range(0, 10) <= 5)
+        if (chosenClip == source.clip && UnityEngine.Random.Range(0, 10) <= 5)
         {
-            chosenClip = selectedClips[Random.Range(0, selectedClips.Length)];
+            chosenClip = selectedClips[UnityEngine.Random.Range(0, selectedClips.Length)];
         }
 
         if (isAudioFinished)
         {
-            source.pitch = Random.Range(0.8f, 1.2f);
+            source.pitch = UnityEngine.Random.Range(0.8f, 1.2f);
         }
 
         source.clip = chosenClip;
@@ -2894,7 +3011,7 @@ public class HaulerController : VehicleController
         if (collisionType == -1)
         {
             selectedClips = minCollisions;
-            chosenClip = selectedClips[Random.Range(0, selectedClips.Length)];
+            chosenClip = selectedClips[UnityEngine.Random.Range(0, selectedClips.Length)];
             source.PlayOneShot(chosenClip);
         }
     }
@@ -2953,6 +3070,7 @@ public class HaulerController : VehicleController
     public void DestroyCarRpc()
     {
         DestroyCar();
+        timeSinceLastCollision = Time.realtimeSinceStartup;
     }
 
     public new void DestroyCar()
@@ -3104,7 +3222,7 @@ public class HaulerController : VehicleController
     {
         if (!VehicleUtils.IsPlayerSeatedInPickup())
             return;
-        GameNetworkManager.Instance.localPlayerController.KillPlayer(Vector3.up * 27f + 20f * Random.insideUnitSphere, spawnBody: true, CauseOfDeath.Blast, 6, Vector3.up * 1.5f, false);
+        GameNetworkManager.Instance.localPlayerController.KillPlayer(Vector3.up * 27f + 20f * UnityEngine.Random.insideUnitSphere, spawnBody: true, CauseOfDeath.Blast, 6, Vector3.up * 1.5f, false);
     }
 
     private void DisableInteractions()
@@ -4011,7 +4129,7 @@ public class HaulerController : VehicleController
                 finishedMagneting = true;
                 turbulenceAmount = 2f;
                 turbulenceAudio.volume = 0.6f;
-                turbulenceAudio.PlayOneShot(maxCollisions[Random.Range(0, maxCollisions.Length)]);
+                turbulenceAudio.PlayOneShot(maxCollisions[UnityEngine.Random.Range(0, maxCollisions.Length)]);
             }
         }
         else
@@ -4081,7 +4199,6 @@ public class HaulerController : VehicleController
             syncedCarHP = carHP;
             SyncCarHealthRpc(carHP);
         }
-
         if (carHP < 9)
         {
             if (!isHoodOnFire)
@@ -4150,13 +4267,13 @@ public class HaulerController : VehicleController
     {
         carHoodOpen = !carHoodOpen;
         carHoodAnimator.SetBool("hoodOpen", carHoodOpen);
-        SetHoodOpenRpc(open: true);
+        SetHoodOpenRpc(open: carHoodOpen);
     }
 
     // used for when the hood is 'on fire'
     public new void SetHoodOpenLocalClient(bool setOpen)
     {
-        if (carHoodOpen && carHoodOpen == setOpen)
+        if (carHoodOpen == setOpen)
             return;
 
         carHoodOpen = setOpen;
@@ -4210,7 +4327,29 @@ public class HaulerController : VehicleController
         if (honkingHorn && hornAudio.isPlaying && hornAudio.pitch < 1f)
             hornAudio.Stop();
 
-        //bool inOrbit = magnetedToShip && (StartOfRound.Instance.inShipPhase || !StartOfRound.Instance.shipDoorsEnabled);
+        bool shipInOrbit = magnetedToShip && (StartOfRound.Instance.inShipPhase || !StartOfRound.Instance.shipDoorsEnabled);
+        SetAudiosMuted(setMuted: shipInOrbit);
+        if (shipInOrbit && windshieldBroken)
+            RegenerateWindshield();
+    }
+
+    public void SetAudiosMuted(bool setMuted)
+    {
+        hornAudio.mute = setMuted;
+        engineAudio1.mute = setMuted;
+        engineAudio2.mute = setMuted;
+
+        cabinAudio.mute = setMuted;
+        carKeyAudio.mute = setMuted;
+        rollingAudio.mute = setMuted;
+        skiddingAudio.mute = setMuted;
+
+        turbulenceAudio.mute = setMuted;
+        hoodFireAudio.mute = setMuted;
+        extremeStressAudio.mute = setMuted;
+        pushAudio.mute = setMuted;
+        radioAudio.mute = setMuted;
+        radioInterference.mute = setMuted;
     }
 
 
@@ -4338,7 +4477,7 @@ public class HaulerController : VehicleController
 
         if (IsOwner)
         {
-            mainRigidbody.AddForceAtPosition(Vector3.Normalize(forward * 1000f) * Random.Range(40f, 50f) * pushForceMultiplier, point - mainRigidbody.transform.up * pushVerticalOffsetAmount, ForceMode.Impulse);
+            mainRigidbody.AddForceAtPosition(Vector3.Normalize(forward * 1000f) * UnityEngine.Random.Range(40f, 50f) * pushForceMultiplier, point - mainRigidbody.transform.up * pushVerticalOffsetAmount, ForceMode.Impulse);
             PushTruckFromOwnerRpc(point);
             return;
         }
@@ -4353,7 +4492,7 @@ public class HaulerController : VehicleController
         turbulenceAmount = Mathf.Min(turbulenceAmount + 0.5f, 2f);
         if (IsOwner)
         {
-            mainRigidbody.AddForceAtPosition(Vector3.Normalize(dir * 1000f) * Random.Range(40f, 50f) * pushForceMultiplier, pushPosition - mainRigidbody.transform.up * pushVerticalOffsetAmount, ForceMode.Impulse);
+            mainRigidbody.AddForceAtPosition(Vector3.Normalize(dir * 1000f) * UnityEngine.Random.Range(40f, 50f) * pushForceMultiplier, pushPosition - mainRigidbody.transform.up * pushVerticalOffsetAmount, ForceMode.Impulse);
         }
     }
 

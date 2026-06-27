@@ -92,7 +92,7 @@ internal class HaulerNetworker : NetworkBehaviour
     {
         if (this != Instance || !IsSpawned)
             return;
-        Plugin.Logger.LogDebug($"V55: Start on 'V55Networker' called!");
+        Plugin.Logger.LogDebug($"Hauler: Start on 'HaulerNetworker' called!");
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
@@ -111,7 +111,7 @@ internal class HaulerNetworker : NetworkBehaviour
                 Plugin.Logger.LogError($"Hauler: Failed to find player data. clientId? {playerObj.playerClientId}");
                 return;
             }
-            Plugin.Logger.LogDebug($"Hauler: Setting zones for player {playerObj.playerClientId} with params: seated? {setSeated}, cab? {setCab}, riding? {setRiding}");
+            //Plugin.Logger.LogDebug($"Hauler: Setting zones for player {playerObj.playerClientId} with params: seated? {setSeated}, cab? {setCab}, riding? {setRiding}");
             playerObjData.playerSeatedInPickup = setSeated;
             playerObjData.playerRidingInPickupCab = setCab;
             playerObjData.playerRidingOnPickup = setRiding;
