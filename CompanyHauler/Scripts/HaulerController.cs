@@ -109,6 +109,8 @@ public class HaulerController : VehicleController
 
     public Rigidbody playerPhysicsBody = null!;
 
+    public AnimationCurve steeringCurve = null!;
+
     public Vector3 previousVehiclePosition;
     public Quaternion previousVehicleRotation;
 
@@ -927,13 +929,12 @@ public class HaulerController : VehicleController
 
     // --- CANCEL OCCUPANT METHOD ---
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void CancelSetPlayerInVehicleClientRpc(int playerId)
+    public void CancelSetPlayerInSeatRpc(int playerId)
     {
-        if ((int)GameNetworkManager.Instance.localPlayerController.playerClientId != playerId)
+        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
+        if (GameNetworkManager.Instance.localPlayerController != playerController)
             return;
-
-        HUDManager.Instance.DisplayTip("Kicked from vehicle",
-            "You have been forcefully kicked to prevent a softlock!");
+        GlobalUtilities.CancelVehicleSeatInteraction();
     }
 
 
@@ -952,6 +953,7 @@ public class HaulerController : VehicleController
             !playerController.isPlayerControlled ||
             currentDriver != null)
         {
+            CancelSetPlayerInSeatRpc(playerId);
             return;
         }
         currentDriver = playerController;
@@ -1103,6 +1105,7 @@ public class HaulerController : VehicleController
             !playerController.isPlayerControlled ||
             currentPassenger != null)
         {
+            CancelSetPlayerInSeatRpc(playerId);
             return;
         }
         currentPassenger = playerController;
@@ -1195,6 +1198,7 @@ public class HaulerController : VehicleController
             !playerController.isPlayerControlled ||
             currentBackLeftPassenger != null)
         {
+            CancelSetPlayerInSeatRpc(playerId);
             return;
         }
         currentBackLeftPassenger = playerController;
@@ -1287,6 +1291,7 @@ public class HaulerController : VehicleController
             !playerController.isPlayerControlled ||
             currentMiddlePassenger != null)
         {
+            CancelSetPlayerInSeatRpc(playerId);
             return;
         }
         currentMiddlePassenger = playerController;
@@ -1384,6 +1389,7 @@ public class HaulerController : VehicleController
             !playerController.isPlayerControlled ||
             currentBackRightPassenger != null)
         {
+            CancelSetPlayerInSeatRpc(playerId);
             return;
         }
         currentBackRightPassenger = playerController;
@@ -1607,7 +1613,10 @@ public class HaulerController : VehicleController
     // --- PLAYER CONTROL ---
     public new void ActivateControl()
     {
-        InputSystem.actions.FindAction("Jump", false).performed += DoTurboBoost;
+        Plugin.VehicleControlsInstance.JumpKey.performed += DoTurboBoost;
+        Plugin.VehicleControlsInstance.ToggleMagnetKey.performed += ActivateMagnet;
+        Plugin.VehicleControlsInstance.ToggleHeadlightsKey.performed += ActivateHeadlights;
+
         if (isInTestMode)
         {
             InputSystem.actions.FindAction("Emote2", false).performed += ChangeGear_Forward;
@@ -1624,7 +1633,10 @@ public class HaulerController : VehicleController
 
     private new void DisableControl()
     {
-        InputSystem.actions.FindAction("Jump", false).performed -= DoTurboBoost;
+        Plugin.VehicleControlsInstance.JumpKey.performed -= DoTurboBoost;
+        Plugin.VehicleControlsInstance.ToggleMagnetKey.performed -= ActivateMagnet;
+        Plugin.VehicleControlsInstance.ToggleHeadlightsKey.performed -= ActivateHeadlights;
+
         if (isInTestMode)
         {
             InputSystem.actions.FindAction("Emote2", false).performed -= ChangeGear_Forward;
@@ -1639,6 +1651,41 @@ public class HaulerController : VehicleController
         brakePedalPressed = false;
     }
 
+
+    // --- KEYBINDS ---
+    public void ActivateHeadlights(InputAction.CallbackContext context)
+    {
+        if (!context.performed)
+            return;
+
+        if (!localPlayerInControl)
+            return;
+
+        ToggleHeadlightsLocalClient();
+    }
+
+    /// <summary>
+    ///  Available from BetterVehicleControls, licensed under MIT License.
+    ///  Source: https://github.com/1A3Dev/LC-BetterVehicleControls/blob/master/source/Patches/VehicleController_Patch.cs#L217
+    /// </summary>
+    public void ActivateMagnet(InputAction.CallbackContext context)
+    {
+        if (!context.performed)
+            return;
+
+        float magnetDistance = Vector3.Distance(transform.position, StartOfRound.Instance.magnetPoint.position);
+        if (magnetDistance >= 20f)
+        {
+            Plugin.Logger.LogDebug($"Hauler: Pickup is too far away from the magnet to toggle it. Distance: {magnetDistance}");
+            return;
+        }
+
+        GlobalReferences.magnetTrigger!.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        string newState = GlobalReferences.magnetTrigger.boolValue ? "Activated" : "Deactivated";
+        HUDManager.Instance.DisplayGlobalNotification($"Ship Magnet {newState}");
+    }
+
+
     public new void GetVehicleInput()
     {
         PlayerControllerB localDriver = GameNetworkManager.Instance.localPlayerController;
@@ -1652,7 +1699,7 @@ public class HaulerController : VehicleController
         SyncVehicleInput();
 
         moveInputVector = IngamePlayerSettings.Instance.playerInput.actions.FindAction("Move", false).ReadValue<Vector2>();
-        moveInputVector.x = Mathf.Round(moveInputVector.x);
+        moveInputVector.x = StartOfRound.Instance.localPlayerUsingController ? moveInputVector.x : Mathf.Round(moveInputVector.x);
         moveInputVector.y = Mathf.Round(moveInputVector.y);
 
         steeringAnimValue = moveInputVector.x;
@@ -1662,18 +1709,14 @@ public class HaulerController : VehicleController
         else
             steeringWheelAnimValue = NormaliseFloat(Mathf.Lerp(steeringWheelAnimValue, steeringAnimValue, steeringSpeed * Time.deltaTime));
 
-        drivePedalPressed = moveInputVector.y > 0.1f && shiftGearCoroutine == null;
-        brakePedalPressed = moveInputVector.y < -0.1f;
+        float gasInputValue = Plugin.VehicleControlsInstance.GasPedalKey.ReadValue<float>();
+        float brakeInputValue = Plugin.VehicleControlsInstance.BrakePedalKey.ReadValue<float>();
 
-        float avgSpeed = averageVelocity.magnitude;
-        if (avgSpeed < 0.5f)
-        {
-            return;
-        }
+        drivePedalPressed = gasInputValue > 0.1f && shiftGearCoroutine == null;
+        brakePedalPressed = brakeInputValue > 0.1f;
 
-        float autoCenterSpeed = Mathf.Clamp01(avgSpeed / 8f);
-        if (moveInputVector.x == 0f && UserConfig.RecenterWheel.Value)
-            steeringWheelAnimFloat = NormaliseFloat(Mathf.MoveTowards(steeringWheelAnimFloat, 0f, steeringWheelTurnSpeed * autoCenterSpeed * Time.deltaTime / 6f));
+        if (UserConfig.RecenterWheel.Value && moveInputVector.x == 0f)
+            steeringWheelAnimFloat = NormaliseFloat(Mathf.MoveTowards(steeringWheelAnimFloat, 0f, steeringWheelTurnSpeed * Time.deltaTime / 6f));
     }
 
     private void SyncVehicleInput()
@@ -1727,9 +1770,9 @@ public class HaulerController : VehicleController
         engineIntensityPercentage = 180f;
         EngineTorque = 2800f;
         engineReversePower = -6000f;
-        carAcceleration = 400f;
-        carDeacceleration = 2900f;
-        reverseCarAcceleration = 2800f;
+        carAcceleration = 470f;
+        carDeacceleration = 3200f;
+        reverseCarAcceleration = 3000f;
         idleSpeed = 60f;
 
         minimalBumpForce = 10000f;
@@ -1763,7 +1806,7 @@ public class HaulerController : VehicleController
         mainRigidbody.maxAngularVelocity = 4f;
 
         mainRigidbody.automaticCenterOfMass = false;
-        mainRigidbody.centerOfMass = new Vector3(0f, -0.25f, 0.7f); // more biased towards the front, loose rear end
+        mainRigidbody.centerOfMass = new Vector3(0f, -0.6f, 0.7f); // more biased towards the front, loose rear end
         mainRigidbody.automaticInertiaTensor = false;
 
         speed = 55;
@@ -1782,17 +1825,17 @@ public class HaulerController : VehicleController
         syncSpeedMultiplier = 10f;
         syncRotationSpeed = 0.2f;
 
-        movingAverageLength = 23;
+        movingAverageLength = 20;
         carHitPlayerForceFraction = 30f;
         carReactToPlayerHitMultiplier = 2850f;
 
         turboBoostForce = 12000f;
         turboBoostUpwardForce = 28800f;
 
-        jumpForce = 5600f;
-        pushForceMultiplier = 78f;
+        jumpForce = 4900f;
+        pushForceMultiplier = 80f;
         pushVerticalOffsetAmount = 1.1f;
-        steeringWheelTurnSpeed = 4.35f;
+        steeringWheelTurnSpeed = 4.65f;
         torqueForce = 1.85f;
 
         SetWheelFriction();
@@ -3694,7 +3737,8 @@ public class HaulerController : VehicleController
 
     private void ApplySteering()
     {
-        steeringAngle = maxSteeringAngle * steeringWheelAnimFloat;
+        //steeringAngle = maxSteeringAngle * steeringWheelAnimFloat;
+        steeringAngle = steeringCurve.Evaluate(Mathf.Abs(steeringWheelAnimFloat)) * (maxSteeringAngle * Mathf.Sign(steeringWheelAnimFloat));
         FrontLeftWheel.steerAngle = steeringAngle;
         FrontRightWheel.steerAngle = steeringAngle;
     }
@@ -4082,16 +4126,24 @@ public class HaulerController : VehicleController
         if (NetworkObject != null && !NetworkObject.IsSpawned)
         {
             RemoveCarRainCollision();
-
             vehicleZone.disablePhysicsRegion = true;
-
             if (StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(vehicleZone))
+            {
                 StartOfRound.Instance.CurrentPlayerPhysicsRegions.Remove(vehicleZone);
-
+            }
+            for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
+            {
+                PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[i];
+                if (playerController.transform.parent == vehicleZone.physicsTransform)
+                {
+                    Transform playerTransform = playerController.isInElevator ? playerController.playersManager.elevatorTransform : playerController.playersManager.playersContainer;
+                    playerController.transform.SetParent(playerTransform);
+                    Plugin.Logger.LogWarning($"Hauler: Player {i} setting parent since vehicle was removed");
+                }
+            }
             if (localPlayerInControl || localPlayerInPassengerSeat ||
                 localPlayerInBackLeftPassengerSeat || localPlayerInMiddlePassengerSeat || localPlayerInBackRightPassengerSeat)
                 GameNetworkManager.Instance.localPlayerController.CancelSpecialTriggerAnimations();
-
             GrabbableObject[] itemsInTruck = vehicleZone.physicsTransform.GetComponentsInChildren<GrabbableObject>();
             for (int i = 0; i < itemsInTruck.Length; i++)
             {
@@ -4510,6 +4562,21 @@ public class HaulerController : VehicleController
     {
         RemoveCarRainCollision();
         DisableControl();
+        vehicleZone.disablePhysicsRegion = true;
+        if (StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(vehicleZone))
+        {
+            StartOfRound.Instance.CurrentPlayerPhysicsRegions.Remove(vehicleZone);
+        }
+        for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
+        {
+            PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[i];
+            if (playerController.transform.parent == vehicleZone.physicsTransform)
+            {
+                Transform playerTransform = playerController.isInElevator ? playerController.playersManager.elevatorTransform : playerController.playersManager.playersContainer;
+                playerController.transform.SetParent(playerTransform);
+                Plugin.Logger.LogWarning($"Hauler: Player {i} setting parent since vehicle was disabled");
+            }
+        }
         if (localPlayerInControl || localPlayerInPassengerSeat ||
             localPlayerInBackLeftPassengerSeat || localPlayerInMiddlePassengerSeat || localPlayerInBackRightPassengerSeat)
         {
@@ -4529,11 +4596,6 @@ public class HaulerController : VehicleController
 
             if (!itemsInTruck[i].isHeld)
                 itemsInTruck[i].FallToGround(false, false, default(Vector3));
-        }
-        vehicleZone.disablePhysicsRegion = true;
-        if (StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(vehicleZone))
-        {
-            StartOfRound.Instance.CurrentPlayerPhysicsRegions.Remove(vehicleZone);
         }
         References.pickupController = null!;
     }

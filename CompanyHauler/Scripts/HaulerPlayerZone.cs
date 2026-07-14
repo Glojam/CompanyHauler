@@ -75,6 +75,7 @@ public class HaulerPlayerZone : MonoBehaviour
     {
         if (disableZone)
         {
+            physicsCollider.enabled = false;
             return;
         }
         if (VehicleUtils.IsPlayerSeatedInPickup())

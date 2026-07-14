@@ -3,23 +3,30 @@ using BepInEx.Bootstrap;
 using BepInEx.Logging;
 using CompanyHauler.Compatibility;
 using CompanyHauler.Networking;
+using CompanyHauler.Utils;
 using HarmonyLib;
 
 namespace CompanyHauler;
 
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 [BepInDependency("scandal.scandalstweaks", BepInDependency.DependencyFlags.HardDependency)]
+[BepInDependency("com.rune580.LethalCompanyInputUtils", BepInDependency.DependencyFlags.HardDependency)]
+[BepInDependency("NoteBoxz.LethalMin", BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency("ImmersiveVisor", BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
     public static Plugin Instance { get; private set; } = null!;
     internal new static ManualLogSource Logger { get; private set; } = null!;
     internal static Harmony? Harmony { get; set; }
 
+    internal static VehicleControls VehicleControlsInstance = null!;
+
     public void Awake()
     {
         Logger = base.Logger;
         Instance = this;
 
+        VehicleControlsInstance = new VehicleControls();
         UserConfig.InitConfig();
 
         Patch();

@@ -46,7 +46,7 @@ public static class GiantKiwiAIPatches
         {
             if (VehicleUtils.IsSeatedPlayerProtected(playerController: playerControllerB, pickupController: controller, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 10f))
             {
-                __instance.timeSinceHittingPlayer = 0f;
+                __instance.timeSinceHittingPlayer = 0.4f;
                 return;
             }
             return;
