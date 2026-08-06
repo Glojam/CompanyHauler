@@ -11,34 +11,31 @@ public static class RedLocustBeesPatches
 {
     [HarmonyPatch(nameof(RedLocustBees.OnCollideWithPlayer))]
     [HarmonyPrefix]
-    static void OnCollideWithPlayer_Prefix(RedLocustBees __instance, Collider other)
+    static void RedLocustBees_Pre_OnCollideWithPlayer(RedLocustBees __instance, Collider other)
     {
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return;
 
-        PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-        if (playerControllerB == null)
+        PlayerControllerB playerController =
+            __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
+        if (playerController == null)
             return;
 
-        if (VehicleUtils.IsPlayerSeatedInPickup())
+        bool playerOnPickup = VehicleUtils.IsPlayerInPickupBounds(playerController, pickupController);
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+
+        if (playerSeated)
         {
-            if (VehicleUtils.IsSeatedPlayerProtected(playerController: playerControllerB, pickupController: controller, checkSunroof: false, checkWindows: true, windshieldCheck: false, velocityCheck: true, velocityMagnitude: 5f))
-            {
+            if (VehicleUtils.IsSeatedPlayerProtected(playerController, pickupController, checkSunroof: false, checkWindows: true, windshieldCheck: false, velocityCheck: true, velocityMagnitude: 5f))
                 __instance.timeSinceHittingPlayer = 0f;
-                return;
-            }
             return;
         }
 
-        if (VehicleUtils.IsPlayerInPickupBounds(pickupController: controller))
-        {
-            if (VehicleUtils.IsPlayerProtectedByPickup(playerController: playerControllerB, pickupController: controller, checkWindows: true, windshieldCheck: false, velocityCheck: true, velocityMagnitude: 5f))
-            {
-                __instance.timeSinceHittingPlayer = 0f;
-                return;
-            }
+        if (!playerOnPickup)
             return;
-        }
+
+        if (VehicleUtils.IsPlayerProtectedByPickup(playerController, pickupController, checkWindows: true, windshieldCheck: false, velocityCheck: true, velocityMagnitude: 5f))
+            __instance.timeSinceHittingPlayer = 0f;
     }
 }

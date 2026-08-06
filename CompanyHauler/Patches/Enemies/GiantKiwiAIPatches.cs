@@ -10,56 +10,50 @@ public static class GiantKiwiAIPatches
 {
     [HarmonyPatch(nameof(GiantKiwiAI.IsEggInsideClosedTruck))]
     [HarmonyPrefix]
-    static bool IsEggInsideClosedTruck_Prefix(GiantKiwiAI __instance, KiwiBabyItem egg, bool closedTruck, ref bool __result, bool __runOriginal)
+    static bool GiantKiwiAI_Pre_IsEggInsideClosedTruck(GiantKiwiAI __instance, KiwiBabyItem egg, bool closedTruck, ref bool __result, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return true;
 
-        if (egg.parentObject == controller.physicsRegion.parentNetworkObject.transform)
-        {
-            __result = !controller.tailgateOpen;
-            return false;
-        }
-        return true;
+        if (egg.parentObject != pickupController.physicsRegion.parentNetworkObject.transform)
+            return true;
+
+        __result = !pickupController.tailgateOpen;
+        return false;
     }
 
     [HarmonyPatch(nameof(GiantKiwiAI.AnimationEventB))]
     [HarmonyPrefix]
-    static void AnimationEventB_Prefix(GiantKiwiAI __instance)
+    static void GiantKiwiAI_Pre_AnimationEventB(GiantKiwiAI __instance)
     {
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return;
 
-        PlayerControllerB playerControllerB = GameNetworkManager.Instance.localPlayerController;
-        if (playerControllerB == null ||
-            !playerControllerB.isPlayerControlled ||
-            playerControllerB.isPlayerDead)
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        if (playerController == null ||
+            !playerController.isPlayerControlled ||
+            playerController.isPlayerDead)
             return;
 
+        bool playerOnPickup = VehicleUtils.IsPlayerInPickupBounds(playerController, pickupController);
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
 
-        if (VehicleUtils.IsPlayerSeatedInPickup())
+        if (playerSeated)
         {
-            if (VehicleUtils.IsSeatedPlayerProtected(playerController: playerControllerB, pickupController: controller, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 10f))
-            {
+            if (VehicleUtils.IsSeatedPlayerProtected(playerController, pickupController, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 10f))
                 __instance.timeSinceHittingPlayer = 0.4f;
-                return;
-            }
             return;
         }
 
-        if (VehicleUtils.IsPlayerInPickupBounds(pickupController: controller))
-        {
-            if (VehicleUtils.IsPlayerProtectedByPickup(playerController: playerControllerB, pickupController: controller, checkSunroof: false, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 10f))
-            {
-                __instance.timeSinceHittingPlayer = 0.4f;
-                return;
-            }
+        if (!playerOnPickup)
             return;
-        }
+
+        if (VehicleUtils.IsPlayerProtectedByPickup(playerController, pickupController, checkSunroof: false, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 10f))
+            __instance.timeSinceHittingPlayer = 0.4f;
     }
 }

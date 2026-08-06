@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace CompanyHauler.Scripts;
 
-public class SunroofSnipper : MonoBehaviour
+public class SunroofSnipper : NetworkBehaviour
 {
     public AudioSource snipAudio = null!;
     public AudioClip snipClip = null!;
@@ -14,9 +14,10 @@ public class SunroofSnipper : MonoBehaviour
         if (!other.gameObject.CompareTag("Player"))
             return;
 
-        PlayerControllerB playerCollidedWith = other.gameObject.GetComponent<PlayerControllerB>();
-        if (playerCollidedWith == null ||
-            playerCollidedWith.isPlayerDead ||
+        if (!other.gameObject.TryGetComponent<PlayerControllerB>(out var playerCollidedWith))
+            return;
+
+        if (playerCollidedWith.isPlayerDead ||
             !playerCollidedWith.isPlayerControlled ||
             playerCollidedWith != GameNetworkManager.Instance.localPlayerController)
             return;

@@ -17,7 +17,7 @@ public class HaulerPlayerZone : MonoBehaviour
     private bool removePlayerFromZoneNextFrame;
     private float checkZoneInterval;
 
-    public bool unsetInZoneWhileSeated; // unused, but will implement for other vehicles later
+    public bool unsetInZoneWhileSeated;
     public bool setInZoneWhileSeated;
 
     public bool playerInZone;
@@ -28,15 +28,15 @@ public class HaulerPlayerZone : MonoBehaviour
     {
         if (setInZoneWhileSeated && unsetInZoneWhileSeated)
         {
-            Plugin.Logger.LogWarning("Hauler: 'Set in zone' and 'Unset in zone' are set simulteanously! this will cause issues!");
-            Plugin.Logger.LogWarning("Hauler: Fallback to set behaviour 'Set zone --> not seated'");
+            Plugin.LogWarning("'Set in zone' and 'Unset in zone' are set simulteanously! this will cause issues");
+            Plugin.LogWarning("Fallback to set behaviour 'Set zone --> not seated'");
             setInZoneWhileSeated = false;
             unsetInZoneWhileSeated = true;
         }
         else if (!setInZoneWhileSeated && !unsetInZoneWhileSeated)
         {
-            Plugin.Logger.LogWarning("Hauler: 'Set in zone' and 'Unset in zone' are unset simulteanously! this will cause issues!");
-            Plugin.Logger.LogWarning("Hauler: Fallback to set behaviour 'Set zone --> not seated'");
+            Plugin.LogWarning("'Set in zone' and 'Unset in zone' are unset simulteanously! this will cause issues");
+            Plugin.LogWarning("Fallback to set behaviour 'Set zone --> not seated'");
             setInZoneWhileSeated = false;
             unsetInZoneWhileSeated = true;
         }
@@ -78,7 +78,7 @@ public class HaulerPlayerZone : MonoBehaviour
             physicsCollider.enabled = false;
             return;
         }
-        if (VehicleUtils.IsPlayerSeatedInPickup())
+        if (VehicleUtils.IsPlayerSeatedInPickup(GameNetworkManager.Instance.localPlayerController, haulerController))
         {
             if (setInZoneWhileSeated)
             {
@@ -98,15 +98,10 @@ public class HaulerPlayerZone : MonoBehaviour
 
     public void UpdatePlayerZone()
     {
-        //if (Time.time - lastPhysicsTime <= 0.15f)
-        //{
-        //    SetPlayerZoneActive();
-        //}
         if (!playerInsideThisFrame)
         {
             return;
         }
-        //playerInsideThisLastFrame = playerInsideThisFrame;
         if (playerInsideThisFrame)
         {
             SetPlayerZoneActive();

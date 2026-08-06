@@ -3,7 +3,7 @@ using System.Reflection;
 using BepInEx.Configuration;
 using HarmonyLib;
 
-namespace CompanyHauler;
+namespace CompanyHauler.Utils;
 
 internal class UserConfig
 {

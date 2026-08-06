@@ -35,8 +35,8 @@ public class HaulerCameraManager : MonoBehaviour
         if (!mainController.IsSpawned || mainController.carDestroyed)
             return;
 
-        PlayerControllerB player = GameNetworkManager.Instance.localPlayerController;
-        if (player == null)
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        if (playerController == null)
             return;
 
         for (var j = 0; j < cameraMirrors.Length; j++)
@@ -47,7 +47,7 @@ public class HaulerCameraManager : MonoBehaviour
         }
 
         if (!UserConfig.haulerMirror.Value ||
-            !PlayerUtils.isSeatedInPickup)
+            !VehicleUtils.IsPlayerSeatedInPickup(playerController, mainController))
         {
             leftMirrorMesh.enabled = false;
             rightMirrorMesh.enabled = false;
@@ -65,7 +65,7 @@ public class HaulerCameraManager : MonoBehaviour
         var activeCamCount = 0;
         for (var i = 0; i < cameraMirrors.Length; i++)
         {
-            if (!meshMirrors[i].IsVisibleToPlayersLocalCamera(player.gameplayCamera))
+            if (!meshMirrors[i].IsVisibleToPlayersLocalCamera(playerController.gameplayCamera))
                 continue;
             activeCamCount++;
         }
@@ -76,7 +76,7 @@ public class HaulerCameraManager : MonoBehaviour
         var stopIndex = (nextCameraToRender + cameraMirrors.Length - 1) % cameraMirrors.Length;
         while (cameraRenderCountRemainder >= 0)
         {
-            if (meshMirrors[nextCameraToRender].IsVisibleToPlayersLocalCamera(player.gameplayCamera))
+            if (meshMirrors[nextCameraToRender].IsVisibleToPlayersLocalCamera(playerController.gameplayCamera))
             {
                 cameraMirrors[nextCameraToRender].enabled = true;
                 cameraRenderCountRemainder--;

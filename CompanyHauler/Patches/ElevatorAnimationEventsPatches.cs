@@ -10,15 +10,19 @@ public static class ElevatorAnimationEventsPatches
 {
     [HarmonyPatch(nameof(ElevatorAnimationEvents.ElevatorFullyRunning))]
     [HarmonyPrefix]
-    static void ElevatorFullyRunning_Prefix()
+    static void ElevatorAnimationEvents_Pre_ElevatorFullyRunning()
     {
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return;
 
-        // save players who are on the magneted pickup from being abandoned
-        PlayerControllerB localPlayer = GameNetworkManager.Instance.localPlayerController;
-        if (VehicleUtils.IsPlayerInPickupBounds(controller))
-            localPlayer.isInElevator = true;
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+        bool playerOnPickup = VehicleUtils.IsPlayerInPickupBounds(playerController, pickupController);
+        bool playerInCab = VehicleUtils.IsPlayerInPickupCab(playerController, pickupController);
+
+        if (playerSeated || playerOnPickup || playerInCab)
+            playerController.isInElevator = true;
     }
 }

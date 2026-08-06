@@ -1,111 +1,158 @@
-﻿using CompanyHauler.Scripts;
+﻿using CompanyHauler.Patches;
+using CompanyHauler.Scripts;
 using GameNetcodeStuff;
 using UnityEngine;
 
 namespace CompanyHauler.Utils;
 public static class VehicleUtils
 {
-    public static bool IsEnemyInPickup(EnemyAI enemyScript, HaulerController pickupController)
+    internal static HaulerController pickupController = null!;
+
+    public static bool IsEnemyInPickup(EnemyAI enemyScript, BoxCollider navMeshBounds)
     {
-        if ((pickupController.collisionTrigger.insideTruckNavMeshBounds.ClosestPoint(enemyScript.transform.position) == enemyScript.transform.position) ||
-            (pickupController.collisionTrigger.insideTruckNavMeshBounds.ClosestPoint(enemyScript.agent.destination) == enemyScript.agent.destination))
+        return navMeshBounds.ClosestPoint(enemyScript.transform.position) == enemyScript.transform.position ||
+               navMeshBounds.ClosestPoint(enemyScript.agent.destination) == enemyScript.agent.destination;
+    }
+
+    public static bool IsPlayerSeatedInPickup(PlayerControllerB playerScript, HaulerController pickupScript)
+    {
+        return playerScript != null && playerScript?.overridePhysicsParent == pickupScript?.transform;
+    }
+
+    public static bool IsPlayerInPickupBounds(PlayerControllerB playerScript, HaulerController pickupScript, bool usePlayerData = false)
+    {
+        return usePlayerData
+            ? PlayerControllerBPatches.playerData[playerScript].playerRidingOnPickup
+            : pickupScript.vehicleZone.playerInZone;
+    }
+
+    public static bool IsPlayerInPickupCab(PlayerControllerB playerScript, HaulerController pickupScript, bool usePlayerData = false)
+    {
+        return usePlayerData
+            ? PlayerControllerBPatches.playerData[playerScript].playerRidingInPickupCab
+            : pickupScript.vehicleCabZone.playerInZone;
+    }
+
+    public static bool IsPlayerOnOutsideOfPickup(PlayerControllerB playerScript, HaulerController pickupScript, bool usePlayerData = false)
+    {
+        return IsPlayerInPickupBounds(playerScript, pickupScript, usePlayerData) &&
+               !IsPlayerInPickupCab(playerScript, pickupScript, usePlayerData) &&
+               !IsPlayerSeatedInPickup(playerScript, pickupScript);
+    }
+
+    public static bool IsPickupCabEnclosed(HaulerController pickupScript)
+    {
+        return !pickupScript.windshieldBroken &&
+               !pickupScript.driverSideDoor.boolValue && !pickupScript.passengerSideDoor.boolValue &&
+               !pickupScript.backLeftDoor.boolValue && !pickupScript.backRightDoor.boolValue &&
+               !pickupScript.frontLeftWindow.isWindowOpen && !pickupScript.frontRightWindow.isWindowOpen &&
+               !pickupScript.backLeftWindow.isWindowOpen && !pickupScript.backRightWindow.isWindowOpen &&
+               !pickupScript.sunroofOpen;
+    }
+
+    public static bool IsPickupMovingFastEnough(HaulerController pickupScript, float threshold)
+    {
+        return pickupScript.averageVelocity.magnitude > threshold;
+    }
+
+    public static bool IsSeatedPlayerProtected(PlayerControllerB playerScript, HaulerController pickupScript, bool checkSunroof = false, bool checkWindows = false, bool windshieldCheck = false, bool velocityCheck = false, float velocityMagnitude = 0f)
+    {
+        if (velocityCheck && IsPickupMovingFastEnough(pickupScript, velocityMagnitude))
             return true;
-        return false;
-    }
 
-    public static bool IsPlayerSeatedInPickup()
-    {
-        return PlayerUtils.isSeatedInPickup;
-    }
+        bool driverSeat = playerScript == pickupScript.currentDriver;
+        bool passengerSeat = playerScript == pickupScript.currentPassenger;
+        bool backLeftSeat = playerScript == pickupScript.currentBackLeftPassenger;
+        bool backMiddleSeat = playerScript == pickupScript.currentBackMiddlePassenger;
+        bool backRightSeat = playerScript == pickupScript.currentBackRightPassenger;
 
-    public static bool IsPlayerInPickupBounds(HaulerController pickupController)
-    {
-        return pickupController.vehicleZone.playerInZone;
-    }
+        bool frontSeatOccupant = driverSeat || passengerSeat;
 
-    public static bool IsPlayerInPickupCab(HaulerController pickupController)
-    {
-        return pickupController.vehicleCabZone.playerInZone;
-    }
+        bool windshieldBroken = pickupScript.windshieldBroken;
+        bool sunroofOpen = pickupScript.sunroofOpen;
 
-    public static bool IsSeatedPlayerProtected(PlayerControllerB playerController, HaulerController pickupController, bool checkSunroof = false, bool checkWindows = false, bool windshieldCheck = false, bool velocityCheck = false, float velocityMagnitude = 0f)
-    {
-        float avgVel = pickupController.averageVelocity.magnitude;
-
-        if (velocityCheck && avgVel > velocityMagnitude)
-            return true;
-
-        bool windshieldBroken = pickupController.windshieldBroken;
-        bool sunroofOpen = pickupController.sunroofOpen;
-        bool isFrontSeatOccupant = playerController == pickupController.currentDriver ||
-                                   playerController == pickupController.currentPassenger;
-
-        if ((checkSunroof && sunroofOpen) || (isFrontSeatOccupant && windshieldCheck && windshieldBroken))
+        if ((checkSunroof && sunroofOpen) ||
+            (frontSeatOccupant && windshieldCheck && windshieldBroken))
             return false;
 
-        bool frontLeftSideOpen = pickupController.driverSideDoor.boolValue || (checkWindows && pickupController.frontLeftWindow.isWindowOpen);
-        bool frontRightSideOpen = pickupController.passengerSideDoor.boolValue || (checkWindows && pickupController.frontRightWindow.isWindowOpen);
+        bool frontLeftSideOpen =
+            pickupScript.driverSideDoor.boolValue ||
+            (checkWindows && pickupScript.frontLeftWindow.isWindowOpen);
 
-        bool backLeftSideOpen = pickupController.backLeftDoor.boolValue || (checkWindows && pickupController.backLeftWindow.isWindowOpen);
-        bool backRightSideOpen = pickupController.backRightDoor.boolValue || (checkWindows && pickupController.backRightWindow.isWindowOpen);
+        bool frontRightSideOpen =
+            pickupScript.passengerSideDoor.boolValue ||
+            (checkWindows && pickupScript.frontRightWindow.isWindowOpen);
 
-        if ((playerController == pickupController.currentDriver && frontLeftSideOpen) || 
-            (playerController == pickupController.currentPassenger && frontRightSideOpen))
+        bool backLeftSideOpen =
+            pickupScript.backLeftDoor.boolValue ||
+            (checkWindows && pickupScript.backLeftWindow.isWindowOpen);
+
+        bool backRightSideOpen =
+            pickupScript.backRightDoor.boolValue ||
+            (checkWindows && pickupScript.backRightWindow.isWindowOpen);
+
+        if (driverSeat && frontLeftSideOpen)
             return false;
-        if ((playerController == pickupController.currentBackLeftPassenger && backLeftSideOpen) ||
-            (playerController == pickupController.currentMiddlePassenger && (backLeftSideOpen || backRightSideOpen)) ||
-            (playerController == pickupController.currentBackRightPassenger && backRightSideOpen))
+
+        if (passengerSeat && frontRightSideOpen)
+            return false;
+
+        if (backLeftSeat && backLeftSideOpen)
+            return false;
+
+        if (backMiddleSeat && (backLeftSideOpen || backRightSideOpen))
+            return false;
+
+        if (backRightSeat && backRightSideOpen)
             return false;
 
         return true;
     }
 
-    public static bool IsPlayerProtectedByPickup(PlayerControllerB playerController, HaulerController pickupController, bool checkSunroof = false, bool checkWindows = false, bool windshieldCheck = false, bool velocityCheck = false, float velocityMagnitude = 0f)
+    public static bool IsPlayerProtectedByPickup(PlayerControllerB playerScript, HaulerController pickupScript, bool checkSunroof = false, bool checkWindows = false, bool windshieldCheck = false, bool velocityCheck = false, float velocityMagnitude = 0f)
     {
-        if (pickupController.carDestroyed)
+        if (pickupScript.carDestroyed)
             return false;
 
-        float avgVel = pickupController.averageVelocity.magnitude;
-
-        if (velocityCheck && avgVel > velocityMagnitude)
+        if (velocityCheck && IsPickupMovingFastEnough(pickupScript, velocityMagnitude))
             return true;
 
-        bool windshieldBroken = pickupController.windshieldBroken;
-        bool sunroofOpen = pickupController.sunroofOpen;
+        bool playerInCab = IsPlayerInPickupCab(playerScript, pickupScript);
 
-        bool doorsOpen = pickupController.driverSideDoor.boolValue ||
-                         pickupController.passengerSideDoor.boolValue ||
-                         pickupController.backLeftDoor.boolValue ||
-                         pickupController.backRightDoor.boolValue;
+        bool windshieldBroken = pickupScript.windshieldBroken;
+        bool sunroofOpen = pickupScript.sunroofOpen;
 
-        bool windowsOpen = pickupController.frontLeftWindow.isWindowOpen ||
-                           pickupController.frontRightWindow.isWindowOpen ||
-                           pickupController.backLeftWindow.isWindowOpen ||
-                           pickupController.backRightWindow.isWindowOpen;
+        bool doorsOpen =
+            pickupScript.driverSideDoor.boolValue ||
+            pickupScript.passengerSideDoor.boolValue ||
+            pickupScript.backLeftDoor.boolValue ||
+            pickupScript.backRightDoor.boolValue;
 
-        bool tailgateOpen = pickupController.tailgateOpen;
+        bool windowsOpen =
+            pickupScript.frontLeftWindow.isWindowOpen ||
+            pickupScript.frontRightWindow.isWindowOpen ||
+            pickupScript.backLeftWindow.isWindowOpen ||
+            pickupScript.backRightWindow.isWindowOpen;
 
-        if (IsPlayerInPickupCab(pickupController) && 
-            doorsOpen || 
-            (checkSunroof && sunroofOpen) || 
-            (checkWindows && windowsOpen) || 
-            (windshieldCheck && windshieldBroken))
+        if (playerInCab &&
+            (doorsOpen ||
+             (checkSunroof && sunroofOpen) ||
+             (checkWindows && windowsOpen) ||
+             (windshieldCheck && windshieldBroken)))
             return false;
-        else if (IsPlayerInPickupBounds(pickupController) &&
-                !IsPlayerInPickupCab(pickupController))
+
+        if (IsPlayerInPickupBounds(playerScript, pickupScript) &&
+            !playerInCab)
             return false;
 
         return true;
     }
 
-    public static bool IsPlayerNearPickup(PlayerControllerB playerController, HaulerController pickupController)
+    public static bool IsPlayerNearPickup(PlayerControllerB playerScript, HaulerController pickupScript)
     {
-        Vector3 vehicleTransform = pickupController.mainRigidbody.position;
-        Vector3 playerTransform = playerController.transform.position;
+        Vector3 vehicleTransform = pickupScript.mainRigidbody.position;
+        Vector3 playerTransform = playerScript.transform.position;
 
-        if (Vector3.Distance(playerTransform, vehicleTransform) > 10f)
-            return false;
-
-        return true;
+        return Vector3.Distance(playerTransform, vehicleTransform) <= 10f;
     }
 }

@@ -1,6 +1,5 @@
 ﻿using CompanyHauler.Scripts;
 using GameNetcodeStuff;
-using System.ComponentModel;
 using UnityEngine;
 
 public class HaulerCollisionTrigger : MonoBehaviour

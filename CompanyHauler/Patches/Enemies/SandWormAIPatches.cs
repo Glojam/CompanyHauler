@@ -8,29 +8,24 @@ namespace CompanyHauler.Patches.Enemies;
 [HarmonyPatch(typeof(SandWormAI))]
 public static class SandWormAIPatches
 {
+    // nom nom nom
     [HarmonyPatch(nameof(SandWormAI.EatPlayer))]
     [HarmonyPrefix]
-    static bool EatPlayer_Prefix(SandWormAI __instance, PlayerControllerB playerScript, bool __runOriginal)
+    static bool SandWormAI_Pre_EatPlayer(SandWormAI __instance, PlayerControllerB playerScript, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return true;
 
-        if (VehicleUtils.IsPlayerSeatedInPickup())
-        {
+        if (VehicleUtils.IsPlayerSeatedInPickup(playerScript, pickupController))
             return false;
-        }
-        if (VehicleUtils.IsPlayerInPickupBounds(pickupController: controller))
-        {
-            if (VehicleUtils.IsPlayerInPickupCab(pickupController: controller))
-            {
-                return false;
-            }
-            return true;
-        }
+
+        if (VehicleUtils.IsPlayerInPickupCab(playerScript, pickupController))
+            return false;
+
         return true;
     }
 }

@@ -1,8 +1,8 @@
 ﻿using HarmonyLib;
-using System.Runtime.CompilerServices;
 using Woecust.ImmersiveVisor;
 using CompanyHauler.Utils;
 using CompanyHauler.Scripts;
+using GameNetcodeStuff;
 
 namespace CompanyHauler.Compatibility;
 
@@ -13,32 +13,23 @@ namespace CompanyHauler.Compatibility;
 ///  Available from BrutalCompanyMinusExtraReborn, licensed under GNU General Public License.
 ///  Source: https://github.com/TheSoftDiamond/BrutalCompanyMinusExtraReborn
 /// </summary>
-
+[HarmonyPatch]
 public static class ImmersiveVisorCompatibility
 {
-    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
-    public static void PatchAllCompatibilityMethods(Harmony harmony)
-    {
-        ApplyVisorPatch(harmony);
-    }
-
+    [HarmonyPatch(typeof(VisorRainState), nameof(VisorRainState.LineCastForCeiling))]
     [HarmonyPrefix]
-    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
-    public static void ApplyVisorPatch(Harmony harmony)
+    public static bool VisorRainState_Pre_LineCastForCeiling(VisorRainState __instance, ref bool __result)
     {
-        var linecastMethod = AccessTools.Method(typeof(VisorRainState), nameof(VisorRainState.LineCastForCeiling));
-        var prefixLinecastMethod = AccessTools.Method(typeof(ImmersiveVisorCompatibility), nameof(LineCastForCeiling_Prefix));
-
-        harmony.Patch(linecastMethod, prefix: new HarmonyMethod(prefixLinecastMethod));
-    }
-
-    public static bool LineCastForCeiling_Prefix(VisorRainState __instance, ref bool __result)
-    {
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return true;
 
-        if (VehicleUtils.IsPlayerInPickupCab(controller))
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+
+        bool playerInCab = VehicleUtils.IsPlayerInPickupCab(playerController, pickupController);
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+
+        if (playerInCab || playerSeated)
         {
             __result = true;
             return false;

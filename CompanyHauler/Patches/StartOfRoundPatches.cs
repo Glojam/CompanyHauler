@@ -10,7 +10,7 @@ public static class StartOfRoundPatches
 {
     [HarmonyPatch(nameof(StartOfRound.Awake))]
     [HarmonyPrefix]
-    private static void Awake_Prefix(StartOfRound __instance)
+    private static void StartOfRound_Pre_Awake()
     {
         HaulerNetworker.Create();
     }
@@ -22,21 +22,21 @@ public static class StartOfRoundPatches
     /// </summary>
     [HarmonyPatch(nameof(StartOfRound.SyncAlreadyHeldObjectsServerRpc))]
     [HarmonyPostfix]
-    static void SyncAlreadyHeldObjectsServerRpc_Postfix(StartOfRound __instance, int joiningClientId)
+    static void StartOfRound_Post_SyncAlreadyHeldObjectsServerRpc(StartOfRound __instance, int joiningClientId)
     {
         if (!__instance.attachedVehicle || __instance.attachedVehicle is not HaulerController controller) return;
         try
         {
             if (controller == null)
             {
-                Plugin.Logger.LogError("Hauler: Attempted to send client data, but the pickup is null? please report this to Scandal.");
+                Plugin.LogError("Attempted to send client data, but the Pickup is null? please report this to Scandal.");
                 return;
             }
             controller.SendClientSyncData();
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError("Hauler: Exception caught sending saved Cruiser data:\n" + e);
+            Plugin.LogError("Exception caught sending saved Pickup data:\n" + e);
         }
     }
 }

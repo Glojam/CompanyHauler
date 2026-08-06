@@ -11,35 +11,29 @@ public static class RadMechAIPatches
 {
     [HarmonyPatch(nameof(RadMechAI.OnCollideWithPlayer))]
     [HarmonyPrefix]
-    static bool OnCollideWithPlayer_Prefix(RadMechAI __instance, Collider other, bool __runOriginal)
+    static bool RadMechAI_Pre_OnCollideWithPlayer(RadMechAI __instance, Collider other, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return true;
 
-        PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-        if (playerControllerB == null)
+        PlayerControllerB playerController =
+            __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
+        if (playerController == null)
             return true;
 
-        if (VehicleUtils.IsPlayerSeatedInPickup())
-        {
-            if (VehicleUtils.IsSeatedPlayerProtected(playerController: playerControllerB, pickupController: controller, checkSunroof: true, checkWindows: true, windshieldCheck: true))
-            {
-                return false;
-            }
+        bool playerOnPickup = VehicleUtils.IsPlayerInPickupBounds(playerController, pickupController);
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+
+        if (playerSeated)
+            return !VehicleUtils.IsSeatedPlayerProtected(playerController, pickupController, checkSunroof: true, checkWindows: true, windshieldCheck: true);
+
+        if (!playerOnPickup)
             return true;
-        }
-        if (VehicleUtils.IsPlayerInPickupBounds(pickupController: controller))
-        {
-            if (VehicleUtils.IsPlayerProtectedByPickup(playerController: playerControllerB, pickupController: controller, checkSunroof: true, checkWindows: true, windshieldCheck: true))
-            {
-                return false;
-            }
-            return true;
-        }
-        return true;
+
+        return !VehicleUtils.IsPlayerProtectedByPickup(playerController, pickupController, checkSunroof: true, checkWindows: true, windshieldCheck: true);
     }
 }

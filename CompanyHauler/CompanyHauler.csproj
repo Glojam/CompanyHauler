@@ -5,7 +5,7 @@
     <AssemblyName>glojam.CompanyHauler</AssemblyName>
     <Product>CompanyHauler</Product>
     <!-- Change to whatever version you're currently on. -->
-    <Version>2.2.4</Version>
+    <Version>2.2.14</Version>
   </PropertyGroup>
 
   <!-- Project Properties -->
@@ -57,25 +57,30 @@
     <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Manual References -->
+  <!-- Manual Package References -->
   <ItemGroup>
     <Reference Include="Unity.Netcode.Runtime" Publicize="true">
       <HintPath>$(LETHAL_COMPANY_DIR)\Lethal Company_Data\Managed\Unity.Netcode.Runtime.dll</HintPath>
     </Reference>
-  </ItemGroup>  
-
-  <!-- Compatibility References -->
-  <ItemGroup>
-    <Reference Include="ScandalTweaks" Publicize="true">
-      <HintPath>$(MANUAL_REFS_DIR)\ScandalsTweaks\scandal.scandalstweaks.dll</HintPath>
+    <Reference Include="ScandalLib" Publicize="true">
+      <HintPath>$(MANUAL_REFERENCES_DIR)\ScandalTheVandal-ScandalLib\scandal.scandallib.dll</HintPath>
+    </Reference>
+    <Reference Include="ScandalsTweaks" Publicize="true">
+      <HintPath>$(MANUAL_REFERENCES_DIR)\ScandalTheVandal-ScandalsTweaks\scandal.scandalstweaks.dll</HintPath>
+    </Reference>
+    <Reference Include="LethalElements" Publicize="true">
+      <HintPath>$(MANUAL_REFERENCES_DIR)\v0xx-LethalElements\voxx.LethalElementsPlugin.dll</HintPath>
     </Reference>
     <Reference Include="LethalMin" Publicize="true">
-      <HintPath>$(MANUAL_REFS_DIR)\NotezyBox-LethalMin\NoteBoxz.LethalMin.dll</HintPath>
+      <HintPath>$(MANUAL_REFERENCES_DIR)\NotezyBox-LethalMin\NoteBoxz.LethalMin.dll</HintPath>
     </Reference>
     <Reference Include="ImmersiveVisor" Publicize="true">
-      <HintPath>$(MANUAL_REFS_DIR)\Woecust-ImmersiveVisor\ImmersiveVisor.dll</HintPath>
-    </Reference>    
-  </ItemGroup>
+      <HintPath>$(MANUAL_REFERENCES_DIR)\Woecust-ImmersiveVisor\ImmersiveVisor.dll</HintPath>
+    </Reference>
+    <Reference Include="FirstPersonView" Publicize="true">
+      <HintPath>$(MANUAL_REFERENCES_DIR)\Seeya-FirstPersonView\FirstPersonView.dll</HintPath>
+    </Reference>   
+  </ItemGroup>  
 
   <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />

@@ -10,24 +10,29 @@ public static class EnemyAIPatches
 {
     [HarmonyPatch(nameof(EnemyAI.PlayerIsTargetable))]
     [HarmonyPostfix]
-    static void PlayerIsTargetable_Postfix(EnemyAI __instance, PlayerControllerB playerScript, bool cannotBeInShip, bool overrideInsideFactoryCheck, bool checkForMineshaftStartTile, ref bool __result)
+    static void EnemyAI_Post_PlayerIsTargetable(EnemyAI __instance, PlayerControllerB playerScript, bool cannotBeInShip, bool overrideInsideFactoryCheck, bool checkForMineshaftStartTile, ref bool __result)
     {
         if (__instance is not BushWolfEnemy)
             return;
 
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return;
 
-        var playerData = PlayerControllerBPatches.playerData[playerScript];
-        bool isOccupant = playerData.playerSeatedInPickup;
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerScript, pickupController);
+        bool playerInCab = VehicleUtils.IsPlayerInPickupCab(playerScript, pickupController, usePlayerData: true);
 
-        if (isOccupant && VehicleUtils.IsSeatedPlayerProtected(playerController: playerScript, pickupController: controller, checkSunroof: false, checkWindows: true))
-            __result = false;
+        if (playerSeated)
+        {
+            if (VehicleUtils.IsSeatedPlayerProtected(playerScript, pickupController, checkSunroof: false, checkWindows: true))
+                __result = false;
+            return;
+        }
 
-        if (playerData.playerRidingInPickupCab && 
-            !controller.driverSideDoor.boolValue && !controller.passengerSideDoor.boolValue && 
-            !controller.backLeftDoor.boolValue && !controller.backRightDoor.boolValue)
+        if (!playerInCab)
+            return;
+
+        if (VehicleUtils.IsPlayerProtectedByPickup(playerScript, pickupController, checkSunroof: false, checkWindows: false))
             __result = false;
     }
 }

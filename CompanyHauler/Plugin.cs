@@ -1,18 +1,23 @@
 using BepInEx;
-using BepInEx.Bootstrap;
 using BepInEx.Logging;
-using CompanyHauler.Compatibility;
-using CompanyHauler.Networking;
+using CompanyHauler.Patches;
+using CompanyHauler.Patches.Enemies;
+using CompanyHauler.Patches.InternalUtils;
 using CompanyHauler.Utils;
 using HarmonyLib;
+using System.Runtime.CompilerServices;
 
 namespace CompanyHauler;
 
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
-[BepInDependency("scandal.scandalstweaks", BepInDependency.DependencyFlags.HardDependency)]
-[BepInDependency("com.rune580.LethalCompanyInputUtils", BepInDependency.DependencyFlags.HardDependency)]
-[BepInDependency("NoteBoxz.LethalMin", BepInDependency.DependencyFlags.SoftDependency)]
-[BepInDependency("ImmersiveVisor", BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(CompatibilityUtils.GUID_LETHAL_LEVEL_LOADER, BepInDependency.DependencyFlags.HardDependency)]
+[BepInDependency(CompatibilityUtils.GUID_SCANDALLIB, BepInDependency.DependencyFlags.HardDependency)]
+[BepInDependency(CompatibilityUtils.GUID_SCANDALS_TWEAKS, BepInDependency.DependencyFlags.HardDependency)]
+[BepInDependency(CompatibilityUtils.GUID_INPUT_UTILS, BepInDependency.DependencyFlags.HardDependency)]
+[BepInDependency(CompatibilityUtils.GUID_LETHALELEMENTS, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(CompatibilityUtils.GUID_LETHALMIN, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(CompatibilityUtils.GUID_IMMERSIVE_VISOR, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(CompatibilityUtils.GUID_FIRST_PERSON_VIEW, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
     public static Plugin Instance { get; private set; } = null!;
@@ -21,8 +26,15 @@ public class Plugin : BaseUnityPlugin
 
     internal static VehicleControls VehicleControlsInstance = null!;
 
+    internal static bool initialized = false;
+
     public void Awake()
     {
+        if (initialized)
+        {
+            return;
+        }
+        initialized = true;
         Logger = base.Logger;
         Instance = this;
 
@@ -30,34 +42,78 @@ public class Plugin : BaseUnityPlugin
         UserConfig.InitConfig();
 
         Patch();
-        Logger.LogInfo($"{MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION} has loaded!");
+        LogInfo($"{MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION} has loaded!");
     }
 
     internal static void Patch()
     {
         Harmony ??= new Harmony(MyPluginInfo.PLUGIN_GUID);
 
-        Logger.LogDebug("Patching...");
+        LogDebug("Patching...");
 
-        Harmony.PatchAll();
+        CompatibilityUtils.Init(Harmony);
 
-        if (IsModPresent("NoteBoxz.LethalMin")) LethalMinCompatibility.PatchAllCompatibilityMethods(Harmony);
-        if (IsModPresent("ImmersiveVisor")) ImmersiveVisorCompatibility.PatchAllCompatibilityMethods(Harmony);
+        // Note: since we're doing soft compat for various mods, we kind of have to do this. Thanks Paco. 
+        // I'm not insane, I promise
+        // May look into seeing if I can do namespace instead?
+        Harmony.PatchAll(type: typeof(ScandalsTweaksPatches));
+        Harmony.PatchAll(type: typeof(BaboonBirdAIPatches));
+        //Harmony.PatchAll(type: typeof(EnemyAIPatches));
+        Harmony.PatchAll(type: typeof(ForestGiantAIPatches));
+        Harmony.PatchAll(type: typeof(GiantKiwiAIPatches));
+        Harmony.PatchAll(type: typeof(MaskedPlayerEnemyPatches));
+        Harmony.PatchAll(type: typeof(MouthDogAIPatches));
+        Harmony.PatchAll(type: typeof(PumaAIPatches));
+        Harmony.PatchAll(type: typeof(RadMechAIPatches));
+        Harmony.PatchAll(type: typeof(RedLocustBeesPatches));
+        Harmony.PatchAll(type: typeof(SandWormAIPatches));
+        Harmony.PatchAll(type: typeof(ElevatorAnimationEventsPatches));
+        Harmony.PatchAll(type: typeof(GameNetworkManagerPatches));
+        Harmony.PatchAll(type: typeof(HUDManagerPatches));
+        Harmony.PatchAll(type: typeof(LandminePatches));
+        Harmony.PatchAll(type: typeof(PlayerControllerBPatches));
+        Harmony.PatchAll(type: typeof(StartOfRoundPatches));
+        Harmony.PatchAll(type: typeof(VehicleControllerPatches));
 
-        Logger.LogDebug("Finished patching!");
+        LogDebug("Finished patching!");
     }
 
     internal static void Unpatch()
     {
-        Logger.LogDebug("Unpatching...");
+        LogDebug("Unpatching...");
 
         Harmony?.UnpatchSelf();
 
-        Logger.LogDebug("Finished unpatching!");
+        LogDebug("Finished unpatching!");
     }
 
-    internal static bool IsModPresent(string name)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void LogMessage(string messageLog)
     {
-        return Chainloader.PluginInfos.ContainsKey(name);
+        Logger.LogMessage(messageLog);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void LogDebug(string debugLog)
+    {
+        Logger.LogDebug(debugLog);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void LogInfo(string infoLog)
+    {
+        Logger.LogInfo(infoLog);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void LogWarning(string warningLog)
+    {
+        Logger.LogWarning(warningLog);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void LogError(string errorLog)
+    {
+        Logger.LogError(errorLog);
     }
 }

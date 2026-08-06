@@ -8,7 +8,7 @@ public static class GameNetworkManagerPatches
 {
     [HarmonyPatch(nameof(GameNetworkManager.Start))]
     [HarmonyPostfix]
-    private static void Start_Postfix(GameNetworkManager __instance)
+    private static void GameNetworkManager_Post_Start(GameNetworkManager __instance)
     {
         HaulerNetworker.Init();
     }

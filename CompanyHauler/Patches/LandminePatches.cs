@@ -1,5 +1,6 @@
 ﻿using CompanyHauler.Scripts;
 using CompanyHauler.Utils;
+using GameNetcodeStuff;
 using HarmonyLib;
 using UnityEngine;
 
@@ -10,20 +11,32 @@ public static class LandminePatches
 {
     [HarmonyPatch(nameof(Landmine.SpawnExplosion))]
     [HarmonyPrefix]
-    private static void SpawnExplosion_Prefix(Landmine __instance, Vector3 explosionPosition, bool spawnExplosionEffect, ref float killRange, ref float damageRange, int nonLethalDamage, float physicsForce, GameObject overridePrefab, bool goThroughCar)
+    private static void Landmine_Pre_SpawnExplosion(Landmine __instance, Vector3 explosionPosition, bool spawnExplosionEffect, ref float killRange, ref float damageRange, int nonLethalDamage, float physicsForce, GameObject overridePrefab, bool goThroughCar)
     {
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return;
 
-        if (!VehicleUtils.IsPlayerNearPickup(GameNetworkManager.Instance.localPlayerController, pickupController: controller))
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        if (!VehicleUtils.IsPlayerNearPickup(playerController, pickupController))
             return;
 
-        bool isProbablyLightning = !goThroughCar && !spawnExplosionEffect &&
-            killRange == 2.4f && damageRange == 5f && nonLethalDamage == 1f && physicsForce == 0f;
+        bool isProbablyLightning =
+            !goThroughCar &&
+            !spawnExplosionEffect &&
+            killRange == 2.4f &&
+            damageRange == 5f &&
+            nonLethalDamage == 1 &&
+            physicsForce == 0f;
 
-        if (isProbablyLightning && 
-            (VehicleUtils.IsPlayerSeatedInPickup() || VehicleUtils.IsPlayerInPickupCab(pickupController: controller)))
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+        bool playerInCab = VehicleUtils.IsPlayerInPickupCab(playerController, pickupController);
+        bool explosionOutsideCab =
+            pickupController.vehicleCabZone.physicsCollider.ClosestPoint(explosionPosition) != explosionPosition;
+
+        if (isProbablyLightning &&
+            (playerInCab || playerSeated) &&
+            explosionOutsideCab)
         {
             killRange = -1f;
             damageRange = -1f;

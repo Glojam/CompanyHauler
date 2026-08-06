@@ -1,7 +1,7 @@
 ﻿using GameNetcodeStuff;
 using UnityEngine;
-using ScandalsTweaks.Utils;
 using CompanyHauler.Patches;
+using ScandalsTweaks.Utils;
 
 namespace CompanyHauler.Scripts;
 
@@ -10,9 +10,9 @@ public class HaulerSoundManager : MonoBehaviour
     public HaulerController controller = null!;
     public float checkInterval;
 
-    public void LateUpdate()
+    public void Update()
     {
-        if (controller == null)
+        if (controller == null || !controller.IsSpawned)
             return;
 
         if (checkInterval < 0.5f)
@@ -34,6 +34,14 @@ public class HaulerSoundManager : MonoBehaviour
 
         var perspectiveData = PlayerControllerBPatches.playerData[perspectivePlayer];
         bool perspectiveInCab = perspectiveData?.playerRidingInPickupCab ?? false;
-        controller.roofRainAudioActive = GlobalUtilities.IsItRaining() && perspectiveInCab;
+        bool perspectiveInVehicle = perspectiveInCab;
+        UpdateRainAudio(perspectiveInVehicle);
+    }
+
+    public void UpdateRainAudio(bool perspectiveInPickup = false)
+    {
+        if (controller.carDestroyed)
+            return;
+        controller.roofRainAudioActive = Utilities.IsItRaining() && perspectiveInPickup;
     }
 }

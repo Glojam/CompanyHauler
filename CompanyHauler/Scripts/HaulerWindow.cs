@@ -25,12 +25,12 @@ public class HaulerWindow : MonoBehaviour
     {
         if (windowAudio == null)
         {
-            Plugin.Logger.LogWarning("Hauler: No window audio set for this window!");
+            Plugin.LogWarning($"No window audio source set for {gameObject.name}");
             return;
         }
         if (windowOpen == null || windowClose == null)
         {
-            Plugin.Logger.LogWarning("Hauler: No window audio clips set for this window!");
+            Plugin.LogWarning($"No window audio clips set for {gameObject.name}");
             return;
         }
         windowAudio.PlayOneShot(windowOpen);
@@ -40,12 +40,12 @@ public class HaulerWindow : MonoBehaviour
     {
         if (windowAudio == null)
         {
-            Plugin.Logger.LogWarning("Hauler: No window audio set for this window!");
+            Plugin.LogWarning($"No window audio source set for {gameObject.name}");
             return;
         }
         if (windowOpen == null || windowClose == null)
         {
-            Plugin.Logger.LogWarning("Hauler: No window audio clips set for this window!");
+            Plugin.LogWarning($"No window audio clips set for {gameObject.name}");
             return;
         }
         windowAudio.PlayOneShot(windowClose);

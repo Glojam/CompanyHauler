@@ -11,59 +11,54 @@ public static class ForestGiantAIPatches
 {
     [HarmonyPatch(nameof(ForestGiantAI.AnimationEventA))]
     [HarmonyPrefix]
-    static bool AnimationEventA_Prefix(ForestGiantAI __instance, bool __runOriginal)
+    static bool ForestGiantAI_Pre_AnimationEventA(ForestGiantAI __instance, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return true;
 
-        PlayerControllerB playerControllerB = GameNetworkManager.Instance.localPlayerController;
-        if (playerControllerB == null)
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        if (playerController == null)
             return false;
 
-        // do not allow fall death in the pickup
-        if (VehicleUtils.IsPlayerInPickupCab(pickupController: controller) ||
-            VehicleUtils.IsPlayerSeatedInPickup())
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+        bool playerInCab = VehicleUtils.IsPlayerInPickupCab(playerController, pickupController);
+
+        if (playerSeated || playerInCab)
             return false;
 
-        // not in our pickup, run vanilla logic
         return true;
     }
 
     [HarmonyPatch(nameof(ForestGiantAI.OnCollideWithPlayer))]
     [HarmonyPrefix]
-    static bool OnCollideWithPlayer_Prefix(ForestGiantAI __instance, Collider other, bool __runOriginal)
+    static bool ForestGiantAI_Pre_OnCollideWithPlayer(ForestGiantAI __instance, Collider other, bool __runOriginal)
     {
         if (!__runOriginal)
             return false;
 
-        HaulerController controller = References.pickupController;
-        if (controller == null)
+        HaulerController pickupController = VehicleUtils.pickupController;
+        if (pickupController == null)
             return true;
 
-        PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, __instance.inEatingPlayerAnimation, false);
-        if (playerControllerB == null)
+        PlayerControllerB playerController = 
+            __instance.MeetsStandardPlayerCollisionConditions(other, __instance.inEatingPlayerAnimation, false);
+        if (playerController == null)
             return true;
 
-        if (VehicleUtils.IsPlayerSeatedInPickup())
-        {
-            if (VehicleUtils.IsSeatedPlayerProtected(playerController: playerControllerB, pickupController: controller, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 8f))
-            {
-                return false;
-            }
+        bool playerOnPickup = VehicleUtils.IsPlayerInPickupBounds(playerController, pickupController);
+        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
+
+        if (playerSeated)
+            return !VehicleUtils.IsSeatedPlayerProtected(playerController, pickupController, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 8f);
+
+        if (!playerOnPickup)
             return true;
-        }
-        if (VehicleUtils.IsPlayerInPickupBounds(pickupController: controller))
-        {
-            if (VehicleUtils.IsPlayerProtectedByPickup(playerController: playerControllerB, pickupController: controller, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 8f))
-            {
-                return false;
-            }
-            return true;
-        }
-        return true;
+
+        return !VehicleUtils.IsPlayerProtectedByPickup(playerController, pickupController, checkSunroof: true, checkWindows: true, windshieldCheck: true, velocityCheck: true, velocityMagnitude: 8f);
     }
 }

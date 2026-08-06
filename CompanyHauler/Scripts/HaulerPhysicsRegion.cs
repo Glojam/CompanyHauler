@@ -1,5 +1,4 @@
-﻿using CompanyHauler.Utils;
-using GameNetcodeStuff;
+﻿using GameNetcodeStuff;
 using UnityEngine;
 
 namespace CompanyHauler.Scripts;
@@ -10,9 +9,6 @@ public class HaulerPhysicsRegion : PlayerPhysicsRegion
 
     private float playerInsideInterval;
     private bool playerInsideThisFrame;
-
-    private bool removePlayerFromZoneNextFrame;
-    private float checkZoneInterval;
 
     private bool addedRegionToList;
 
@@ -35,7 +31,7 @@ public class HaulerPhysicsRegion : PlayerPhysicsRegion
             {
                 Transform playerTransform = playerController.isInElevator ? playerController.playersManager.elevatorTransform : playerController.playersManager.playersContainer;
                 playerController.transform.SetParent(playerTransform);
-                Plugin.Logger.LogWarning($"Hauler: Player {i} setting parent since physics region was destroyed");
+                Plugin.LogWarning($"Player {i} setting parent since physics region was destroyed");
             }
         }
         if (!allowDroppingItems || itemDropCollider == null) return;
@@ -112,8 +108,6 @@ public class HaulerPhysicsRegion : PlayerPhysicsRegion
 
     public void SetPlayerZoneActive()
     {
-        checkZoneInterval = 0f;
-        removePlayerFromZoneNextFrame = false;
         playerInZone = true;
     }
 
@@ -155,7 +149,6 @@ public class HaulerPhysicsRegion : PlayerPhysicsRegion
         isRegionActive = IsPhysicsRegionActive();
         UpdatePhysicsRegion();
         SetPhysicsRegionAndZone(ref checkInterval, ref removePlayerNextFrame, ref hasLocalPlayer, true);
-        //SetPhysicsRegionAndZone(ref checkZoneInterval, ref removePlayerFromZoneNextFrame, ref playerInZone);
     }
 
     public void UpdatePhysicsRegion()
@@ -164,8 +157,6 @@ public class HaulerPhysicsRegion : PlayerPhysicsRegion
         {
             if (playerInZone)
             {
-                checkZoneInterval = 0f;
-                removePlayerFromZoneNextFrame = false;
                 playerInZone = false;
             }
             return;
