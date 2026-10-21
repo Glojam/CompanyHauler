@@ -5,10 +5,10 @@ using GameNetcodeStuff;
 
 namespace CompanyHauler.Patches;
 
-[HarmonyPatch(typeof(VehicleController))]
+[HarmonyPatch]
 public static class VehicleControllerPatches
 {
-    [HarmonyPatch(nameof(VehicleController.DisableVehicleCollisionForAllPlayers))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.DisableVehicleCollisionForAllPlayers))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_DisableVehicleCollisionForAllPlayers(VehicleController __instance, bool __runOriginal)
     {
@@ -22,7 +22,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.EnableVehicleCollisionForAllPlayers))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.EnableVehicleCollisionForAllPlayers))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_EnableVehicleCollisionForAllPlayers(VehicleController __instance, bool __runOriginal)
     {
@@ -36,7 +36,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SetVehicleCollisionForPlayer))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SetVehicleCollisionForPlayer))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SetVehicleCollisionForPlayer(VehicleController __instance, bool __runOriginal, bool setEnabled, PlayerControllerB player)
     {
@@ -50,7 +50,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SetBackDoorOpen))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SetBackDoorOpen))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SetBackDoorOpen(VehicleController __instance, bool __runOriginal, bool open)
     {
@@ -63,7 +63,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SetFrontCabinLightOn))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SetFrontCabinLightOn))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SetFrontCabinLightOn(VehicleController __instance, bool __runOriginal, bool setOn)
     {
@@ -78,7 +78,7 @@ public static class VehicleControllerPatches
     }
 
     // thank you MattyMatty, and DiFFoZ for helping me with this!!
-    [HarmonyPatch(nameof(VehicleController.AddEngineOil))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.AddEngineOil))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_AddEngineOil(VehicleController __instance, bool __runOriginal)
     {
@@ -95,7 +95,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.AddTurboBoost))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.AddTurboBoost))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_AddTurboBoost(VehicleController __instance, bool __runOriginal)
     {
@@ -108,7 +108,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.StartMagneting))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.StartMagneting))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_StartMagneting(VehicleController __instance, bool __runOriginal)
     {
@@ -121,7 +121,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.CollectItemsInTruck))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.CollectItemsInTruck))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_CollectItemsInTruck(VehicleController __instance, bool __runOriginal)
     {
@@ -135,7 +135,7 @@ public static class VehicleControllerPatches
     }
 
 
-    [HarmonyPatch(nameof(VehicleController.DestroyCar))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.DestroyCar))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_DestroyCar(VehicleController __instance, bool __runOriginal)
     {
@@ -149,7 +149,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.ExitDriverSideSeat))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.ExitDriverSideSeat))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_ExitDriverSideSeat(VehicleController __instance, bool __runOriginal)
     {
@@ -162,7 +162,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.ExitPassengerSideSeat))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.ExitPassengerSideSeat))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_ExitPassengerSideSeat(VehicleController __instance, bool __runOriginal)
     {
@@ -175,7 +175,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.CarReactToObstacle))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.CarReactToObstacle))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_CarReactToObstacle(VehicleController __instance, bool __runOriginal, Vector3 vel, Vector3 position, Vector3 impulse, CarObstacleType type, float obstacleSize, EnemyAI enemyScript, bool dealDamage)
     {
@@ -189,7 +189,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.DealPermanentDamage))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.DealPermanentDamage))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_DealPermanentDamage(VehicleController __instance, bool __runOriginal, int damageAmount, Vector3 damagePosition)
     {
@@ -203,7 +203,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.DamagePlayerInVehicle))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.DamagePlayerInVehicle))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_DamagePlayerInVehicle(VehicleController __instance, bool __runOriginal, Vector3 vel, float magnitude)
     {
@@ -217,7 +217,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SetInternalStress))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SetInternalStress))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SetInternalStress(VehicleController __instance, bool __runOriginal, float carStressIncrease)
     {
@@ -231,7 +231,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.ToggleHeadlightsLocalClient))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.ToggleHeadlightsLocalClient))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_ToggleHeadlightsLocalClient(VehicleController __instance, bool __runOriginal)
     {
@@ -245,7 +245,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SetHeadlightMaterial))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SetHeadlightMaterial))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SetHeadlightMaterial(VehicleController __instance, bool __runOriginal, bool on)
     {
@@ -259,7 +259,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SpringDriverSeatLocalClient))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SpringDriverSeatLocalClient))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SpringDriverSeatLocalClient(VehicleController __instance, bool __runOriginal)
     {
@@ -272,7 +272,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SetRadioOnLocalClient))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SetRadioOnLocalClient))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SetRadioOnLocalClient(VehicleController __instance, bool __runOriginal, bool on, bool setClip)
     {
@@ -286,7 +286,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.SwitchRadio))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.SwitchRadio))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_SwitchRadio(VehicleController __instance, bool __runOriginal)
     {
@@ -300,7 +300,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.ChangeRadioStation))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.ChangeRadioStation))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_ChangeRadioStation(VehicleController __instance, bool __runOriginal)
     {
@@ -314,7 +314,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.StartTryCarIgnition))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.StartTryCarIgnition))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_StartTryCarIgnition(VehicleController __instance, bool __runOriginal)
     {
@@ -328,7 +328,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.CancelTryCarIgnition))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.CancelTryCarIgnition))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_CancelTryCarIgnition(VehicleController __instance, bool __runOriginal)
     {
@@ -342,7 +342,7 @@ public static class VehicleControllerPatches
         return false;
     }
 
-    [HarmonyPatch(nameof(VehicleController.RemoveKeyFromIgnition))]
+    [HarmonyPatch(typeof(VehicleController), nameof(VehicleController.RemoveKeyFromIgnition))]
     [HarmonyPrefix]
     static bool VehicleController_Pre_RemoveKeyFromIgnition(VehicleController __instance, bool __runOriginal)
     {

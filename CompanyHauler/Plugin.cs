@@ -1,8 +1,6 @@
 using BepInEx;
 using BepInEx.Logging;
 using CompanyHauler.Patches;
-using CompanyHauler.Patches.Enemies;
-using CompanyHauler.Patches.InternalUtils;
 using CompanyHauler.Utils;
 using HarmonyLib;
 using System.Runtime.CompilerServices;
@@ -16,7 +14,6 @@ namespace CompanyHauler;
 [BepInDependency(CompatibilityUtils.GUID_INPUT_UTILS, BepInDependency.DependencyFlags.HardDependency)]
 [BepInDependency(CompatibilityUtils.GUID_LETHALELEMENTS, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(CompatibilityUtils.GUID_LETHALMIN, BepInDependency.DependencyFlags.SoftDependency)]
-[BepInDependency(CompatibilityUtils.GUID_IMMERSIVE_VISOR, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(CompatibilityUtils.GUID_FIRST_PERSON_VIEW, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
@@ -52,28 +49,7 @@ public class Plugin : BaseUnityPlugin
         LogDebug("Patching...");
 
         CompatibilityUtils.Init(Harmony);
-
-        // Note: since we're doing soft compat for various mods, we kind of have to do this. Thanks Paco. 
-        // I'm not insane, I promise
-        // May look into seeing if I can do namespace instead?
-        Harmony.PatchAll(type: typeof(ScandalsTweaksPatches));
-        Harmony.PatchAll(type: typeof(BaboonBirdAIPatches));
-        //Harmony.PatchAll(type: typeof(EnemyAIPatches));
-        Harmony.PatchAll(type: typeof(ForestGiantAIPatches));
-        Harmony.PatchAll(type: typeof(GiantKiwiAIPatches));
-        Harmony.PatchAll(type: typeof(MaskedPlayerEnemyPatches));
-        Harmony.PatchAll(type: typeof(MouthDogAIPatches));
-        Harmony.PatchAll(type: typeof(PumaAIPatches));
-        Harmony.PatchAll(type: typeof(RadMechAIPatches));
-        Harmony.PatchAll(type: typeof(RedLocustBeesPatches));
-        Harmony.PatchAll(type: typeof(SandWormAIPatches));
-        Harmony.PatchAll(type: typeof(ElevatorAnimationEventsPatches));
-        Harmony.PatchAll(type: typeof(GameNetworkManagerPatches));
-        Harmony.PatchAll(type: typeof(HUDManagerPatches));
-        Harmony.PatchAll(type: typeof(LandminePatches));
-        Harmony.PatchAll(type: typeof(PlayerControllerBPatches));
-        Harmony.PatchAll(type: typeof(StartOfRoundPatches));
-        Harmony.PatchAll(type: typeof(VehicleControllerPatches));
+        Harmony.PatchAll();
 
         LogDebug("Finished patching!");
     }

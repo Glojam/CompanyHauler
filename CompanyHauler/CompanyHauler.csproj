@@ -5,7 +5,7 @@
     <AssemblyName>glojam.CompanyHauler</AssemblyName>
     <Product>CompanyHauler</Product>
     <!-- Change to whatever version you're currently on. -->
-    <Version>2.2.14</Version>
+    <Version>2.2.37</Version>
   </PropertyGroup>
 
   <!-- Project Properties -->
@@ -73,9 +73,6 @@
     </Reference>
     <Reference Include="LethalMin" Publicize="true">
       <HintPath>$(MANUAL_REFERENCES_DIR)\NotezyBox-LethalMin\NoteBoxz.LethalMin.dll</HintPath>
-    </Reference>
-    <Reference Include="ImmersiveVisor" Publicize="true">
-      <HintPath>$(MANUAL_REFERENCES_DIR)\Woecust-ImmersiveVisor\ImmersiveVisor.dll</HintPath>
     </Reference>
     <Reference Include="FirstPersonView" Publicize="true">
       <HintPath>$(MANUAL_REFERENCES_DIR)\Seeya-FirstPersonView\FirstPersonView.dll</HintPath>

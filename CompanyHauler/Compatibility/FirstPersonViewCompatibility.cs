@@ -11,10 +11,9 @@ namespace CompanyHauler.Compatibility;
 ///  Available from BrutalCompanyMinusExtraReborn, licensed under GNU General Public License.
 ///  Source: https://github.com/TheSoftDiamond/BrutalCompanyMinusExtraReborn
 /// </summary>
-[HarmonyPatch]
 public static class FirstPersonViewCompatibility
 {
-    [HarmonyPatch(typeof(HaulerController), nameof(HaulerController.SetCarKeyEffects))]
+    [HarmonyPatch(typeof(HaulerController), nameof(HaulerController.SetCarIgnitionKey))]
     [HarmonyPrefix]
     public static void HaulerController_Pre_SetCarKeyEffects(HaulerController __instance, ref bool localUseBodyHands)
     {

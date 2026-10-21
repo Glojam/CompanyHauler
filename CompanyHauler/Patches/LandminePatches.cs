@@ -6,10 +6,10 @@ using UnityEngine;
 
 namespace CompanyHauler.Patches;
 
-[HarmonyPatch(typeof(Landmine))]
+[HarmonyPatch]
 public static class LandminePatches
 {
-    [HarmonyPatch(nameof(Landmine.SpawnExplosion))]
+    [HarmonyPatch(typeof(Landmine), nameof(Landmine.SpawnExplosion))]
     [HarmonyPrefix]
     private static void Landmine_Pre_SpawnExplosion(Landmine __instance, Vector3 explosionPosition, bool spawnExplosionEffect, ref float killRange, ref float damageRange, int nonLethalDamage, float physicsForce, GameObject overridePrefab, bool goThroughCar)
     {
@@ -29,13 +29,12 @@ public static class LandminePatches
             nonLethalDamage == 1 &&
             physicsForce == 0f;
 
-        bool playerSeated = VehicleUtils.IsPlayerSeatedInPickup(playerController, pickupController);
-        bool playerInCab = VehicleUtils.IsPlayerInPickupCab(playerController, pickupController);
+        bool playerInCabOrSeated = pickupController.IsPlayerInCabinOrSeated(playerController);
         bool explosionOutsideCab =
             pickupController.vehicleCabZone.physicsCollider.ClosestPoint(explosionPosition) != explosionPosition;
 
         if (isProbablyLightning &&
-            (playerInCab || playerSeated) &&
+            playerInCabOrSeated &&
             explosionOutsideCab)
         {
             killRange = -1f;

@@ -1,7 +1,6 @@
 ﻿using GameNetcodeStuff;
 using UnityEngine;
-using CompanyHauler.Patches;
-using ScandalsTweaks.Utils;
+using ScandalLib.Utils;
 
 namespace CompanyHauler.Scripts;
 
@@ -32,8 +31,7 @@ public class HaulerSoundManager : MonoBehaviour
             perspectivePlayer = localPlayerController.spectatedPlayerScript;
         }
 
-        var perspectiveData = PlayerControllerBPatches.playerData[perspectivePlayer];
-        bool perspectiveInCab = perspectiveData?.playerRidingInPickupCab ?? false;
+        bool perspectiveInCab = controller.IsPlayerInCabinOrSeated(perspectivePlayer);
         bool perspectiveInVehicle = perspectiveInCab;
         UpdateRainAudio(perspectiveInVehicle);
     }

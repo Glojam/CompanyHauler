@@ -21,18 +21,6 @@ internal class VehicleControls : LcInputActions
     [InputAction(KeyboardControl.Space, Name = "Jump", GamepadControl = GamepadControl.Unbound)]
     public InputAction JumpKey { get; set; } = null!;
 
-    /*
-    [InputAction(KeyboardControl.F, Name = "Headlamps", GamepadControl = GamepadControl.Unbound)]
-    public InputAction ToggleHeadlightsKey { get; set; } = null!;
-
-    
-    [InputAction(KeyboardControl.H, Name = "Horn", GamepadControl = GamepadControl.Unbound)]
-    public InputAction ActivateHornKey { get; set; } = null!;
-
-
-    [InputAction(KeyboardControl.None, Name = "Wipers", GamepadControl = GamepadControl.Unbound)]
-    public InputAction ToggleWipersKey { get; set; } = null!;
-    */
 
     [InputAction(KeyboardControl.None, Name = "Magnet")]
     public InputAction ToggleMagnetKey { get; set; } = null!;

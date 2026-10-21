@@ -1,200 +1,185 @@
 ﻿using GameNetcodeStuff;
-using UnityEngine;
+using ScandalLib.Interfaces;
+using ScandalLib.Scripts;
 
 namespace CompanyHauler.Scripts;
 
-public class HaulerPhysicsRegion : PlayerPhysicsRegion
+public class HaulerPhysicsRegion : ExtendedPhysicsRegion
 {
-    public HaulerController haulerController = null!;
+    public HaulerController vehicleController = null!;
 
-    private float playerInsideInterval;
-    private bool playerInsideThisFrame;
-
-    private bool addedRegionToList;
-
-    public bool playerInZone;
-    public bool isRegionActive;
-
-    public bool parentPlayerBodies;
-
-    public new void OnDestroy()
+    // must null check before calling
+    internal bool IsLocalPlayerInShelter()
     {
-        disablePhysicsRegion = true;
-        if (StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(this))
+        return vehicleController.vehicleCabZone.playerInZone && vehicleController.IsCabinEnclosed();
+    }
+
+    public override bool IsTargetPlayerInVehicle(PlayerControllerB playerScript, EnemyAI enemyAi)
+    {
+        if (playerScript is not IPlayerManager playerInterface)
+            return false;
+        switch (enemyAi)
         {
-            StartOfRound.Instance.CurrentPlayerPhysicsRegions.Remove(this);
-        }
-        for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
-        {
-            PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[i];
-            if (playerController.transform.parent == physicsTransform)
-            {
-                Transform playerTransform = playerController.isInElevator ? playerController.playersManager.elevatorTransform : playerController.playersManager.playersContainer;
-                playerController.transform.SetParent(playerTransform);
-                Plugin.LogWarning($"Player {i} setting parent since physics region was destroyed");
-            }
-        }
-        if (!allowDroppingItems || itemDropCollider == null) return;
-        GrabbableObject[] componentsInChildren = physicsTransform.GetComponentsInChildren<GrabbableObject>();
-        for (int j = 0; j < componentsInChildren.Length; j++)
-        {
-            if (RoundManager.Instance.mapPropsContainer != null)
-            {
-                componentsInChildren[j].transform.SetParent(RoundManager.Instance.mapPropsContainer.transform, worldPositionStays: true);
-            }
-            else
-            {
-                componentsInChildren[j].transform.SetParent(null, worldPositionStays: true);
-            }
-            if (!componentsInChildren[j].isHeld)
-            {
-                componentsInChildren[j].FallToGround();
-            }
+            case GiantKiwiAI:
+                return vehicleController.IsPlayerSeated(playerScript) ||
+                    ((vehicleController.IsPlayerInCabin(playerScript) && vehicleController.IsCabinEnclosed()) ||
+                     vehicleController.ontopOfTruckCollider.ClosestPoint(playerScript.transform.position) == playerScript.transform.position);
+            default:
+                return false;
         }
     }
 
-    public new void OnTriggerStay(Collider other)
+    public override bool IsPlayerProtectedFromEnemy(PlayerControllerB playerScript, EnemyAI enemyAi)
     {
-        if (disablePhysicsRegion)
+        switch (enemyAi)
         {
-            return;
-        }
-        PlayerControllerB localPlayer = GameNetworkManager.Instance.localPlayerController;
-        if (localPlayer == null)
-        {
-            hasLocalPlayer = false;
-            playerInZone = false;
-            return;
-        }
-        string tag = other.gameObject.tag;
-        if (parentPlayerBodies && tag.StartsWith("PlayerRagdoll"))
-        {
-            PlayerControllerB playerControllerB = null!;
-            if (other.gameObject.TryGetComponent<DeadBodyInfo>(out var deadBodyInfo))
-            {
-                playerControllerB = deadBodyInfo.playerScript;
-            }
-            if (playerControllerB != null && playerControllerB.deadBody != null &&
-                !playerControllerB.deadBody.isParentedToPhysicsRegion)
-            {
-                playerControllerB.deadBody.SetPhysicsParent(physicsTransform, physicsCollider);
-            }
-            return;
-        }
-        if (!other.gameObject.CompareTag("Player"))
-        {
-            return;
-        }
-        if (other.gameObject != localPlayer.gameObject)
-        {
-            return;
-        }
-        playerInsideThisFrame = true;
-        playerInsideInterval = 0f;
-    }
-
-    public void SetPhysicsRegionActive()
-    {
-        if (!isRegionActive)
-        {
-            if (addedRegionToList)
-                TryRemovePhysicsRegionFromList();
-            return;
-        }
-        checkInterval = 0f;
-        removePlayerNextFrame = false;
-        TryAddPhysicsRegionToList();
-    }
-
-    public void SetPlayerZoneActive()
-    {
-        playerInZone = true;
-    }
-
-    public new bool IsPhysicsRegionActive()
-    {
-        return Vector3.Angle(transform.up, Vector3.up) <= maxTippingAngle && !disablePhysicsRegion;
-    }
-
-    public void TryRemovePhysicsRegionFromList()
-    {
-        StartOfRound.Instance?.CurrentPlayerPhysicsRegions?.Remove(this);
-        addedRegionToList = false;
-        hasLocalPlayer = false;
-        removePlayerNextFrame = false;
-        checkInterval = 0f;
-    }
-
-    public void TryAddPhysicsRegionToList()
-    {
-        if (addedRegionToList || !isRegionActive)
-            return;
-
-        if (StartOfRound.Instance.CurrentPlayerPhysicsRegions != null &&
-            !StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(this))
-        {
-            StartOfRound.Instance.CurrentPlayerPhysicsRegions.Add(this);
-            addedRegionToList = true;
-            hasLocalPlayer = true;
+            case BaboonBirdAI:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: true, checkWindshield: true, checkSunroof: false, velocityCheck: true, velocityThreshold: 8f);
+            case ForestGiantAI:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: true, checkWindshield: true, checkSunroof: true, velocityCheck: true, velocityThreshold: 10f);
+            case GiantKiwiAI:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: true, checkWindshield: true, checkSunroof: true, velocityCheck: true, velocityThreshold: 12f);
+            case MaskedPlayerEnemy:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: false, checkWindshield: false, checkSunroof: false, velocityCheck: true, velocityThreshold: 4f);
+            case MouthDogAI:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: false, checkWindshield: true, checkSunroof: false, velocityCheck: true, velocityThreshold: 12f);
+            case PumaAI:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: true, checkWindshield: true, checkSunroof: false, velocityCheck: true, velocityThreshold: 9f);
+            case RadMechAI:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: true, checkWindshield: true, checkSunroof: true, velocityCheck: true, velocityThreshold: 10f);
+            case RedLocustBees:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: true, checkWindshield: true, checkSunroof: false, velocityCheck: true, velocityThreshold: 8f);
+            case SandWormAI:
+                return vehicleController.IsPlayerSeated(playerScript) ||
+                       vehicleController.IsPlayerInCabin(playerScript);
+            case BushWolfEnemy:
+                return IsPlayerProtectedByVehicle(playerScript, enemyAi, checkWindows: false, checkWindshield: false, checkSunroof: false, velocityCheck: true, velocityThreshold: 6f);
+            default:
+                return false;
         }
     }
 
-    public new void Update()
+    internal bool IsPlayerProtectedByVehicle(PlayerControllerB playerScript, EnemyAI enemyAi, bool checkWindows = false, bool checkWindshield = false, bool checkSunroof = false, bool velocityCheck = false, float velocityThreshold = 0f)
     {
-        if (disablePhysicsRegion)
+        var playerSeated = vehicleController.IsPlayerSeated(playerScript);
+        if (playerSeated)
         {
-            physicsCollider.enabled = false;
-            return;
+            return IsSeatedPlayerProtected(playerScript, checkWindows, checkWindshield, checkSunroof, velocityCheck, velocityThreshold);
         }
-        isRegionActive = IsPhysicsRegionActive();
-        UpdatePhysicsRegion();
-        SetPhysicsRegionAndZone(ref checkInterval, ref removePlayerNextFrame, ref hasLocalPlayer, true);
+        var playerInCab = vehicleController.IsPlayerInCabin(playerScript);
+        if (!playerInCab)
+            return false;
+        if (velocityCheck)
+        {
+            float vehicleSpeed = vehicleController.averageVelocity.magnitude;
+            if (vehicleSpeed >= velocityThreshold)
+                return true;
+        }
+        return IsPlayerProtectedByPickup(playerScript, checkWindows, checkWindshield, checkSunroof, velocityCheck, velocityThreshold);
     }
 
-    public void UpdatePhysicsRegion()
+    public bool IsSeatedPlayerProtected(PlayerControllerB playerScript, bool checkWindows = false, bool windshieldCheck = false, bool checkSunroof = false, bool velocityCheck = false, float velocityThreshold = 0f)
     {
-        if (!playerInsideThisFrame)
-        {
-            if (playerInZone)
-            {
-                playerInZone = false;
-            }
-            return;
-        }
-        if (playerInsideThisFrame)
-        {
-            SetPhysicsRegionActive();
-            SetPlayerZoneActive();
-        }
-        if (playerInsideInterval <= 0.15f)
-        {
-            playerInsideInterval += Time.deltaTime;
-            return;
-        }
-        playerInsideThisFrame = false;
-        playerInsideInterval = 0f;
+        float vehicleSpeed = vehicleController.averageVelocity.magnitude;
+        if (velocityCheck && vehicleSpeed >= velocityThreshold)
+            return true;
+
+        bool driverSeat = playerScript == vehicleController.currentDriver;
+        bool passengerSeat = playerScript == vehicleController.currentPassenger;
+        bool backLeftSeat = playerScript == vehicleController.currentBackLeftPassenger;
+        bool backMiddleSeat = playerScript == vehicleController.currentBackMiddlePassenger;
+        bool backRightSeat = playerScript == vehicleController.currentBackRightPassenger;
+
+        bool frontSeatOccupant = driverSeat || passengerSeat;
+
+        bool windshieldBroken = vehicleController.windshieldBroken;
+        bool sunroofOpen = vehicleController.sunroofOpen;
+
+        if ((checkSunroof && sunroofOpen) ||
+            (frontSeatOccupant && windshieldCheck && windshieldBroken))
+            return false;
+
+        bool frontLeftSideOpen =
+            vehicleController.driverSideDoor.boolValue ||
+            (checkWindows && vehicleController.frontLeftWindow.isWindowOpen);
+
+        bool frontRightSideOpen =
+            vehicleController.passengerSideDoor.boolValue ||
+            (checkWindows && vehicleController.frontRightWindow.isWindowOpen);
+
+        bool backLeftSideOpen =
+            vehicleController.backLeftDoor.boolValue ||
+            (checkWindows && vehicleController.backLeftWindow.isWindowOpen);
+
+        bool backRightSideOpen =
+            vehicleController.backRightDoor.boolValue ||
+            (checkWindows && vehicleController.backRightWindow.isWindowOpen);
+
+        if (driverSeat && frontLeftSideOpen)
+            return false;
+
+        if (passengerSeat && frontRightSideOpen)
+            return false;
+
+        if (backLeftSeat && backLeftSideOpen)
+            return false;
+
+        if (backMiddleSeat && (backLeftSideOpen || backRightSideOpen))
+            return false;
+
+        if (backRightSeat && backRightSideOpen)
+            return false;
+
+        return true;
     }
 
-    public void SetPhysicsRegionAndZone(ref float interval, ref bool removeNextFrame, ref bool hasPlayer, bool removeFromPhysicsList = false)
+    public bool IsPlayerProtectedByPickup(PlayerControllerB playerScript, bool checkWindows = false, bool windshieldCheck = false, bool checkSunroof = false, bool velocityCheck = false, float velocityThreshold = 0f)
     {
-        if (!hasPlayer)
-        {
-            return;
-        }
-        if (interval <= 0.15f)
-        {
-            interval += Time.deltaTime;
-            return;
-        }
-        if (!removeNextFrame)
-        {
-            removeNextFrame = true;
-            return;
-        }
-        removeNextFrame = false;
-        interval = 0f;
-        hasPlayer = false;
-        if (removeFromPhysicsList)
-            TryRemovePhysicsRegionFromList();
+        if (vehicleController.carDestroyed)
+            return false;
+
+        float vehicleSpeed = vehicleController.averageVelocity.magnitude;
+        if (velocityCheck && vehicleSpeed >= velocityThreshold)
+            return true;
+
+        var playerInCab = vehicleController.IsPlayerInCabin(playerScript);
+
+        bool windshieldBroken = vehicleController.windshieldBroken;
+        bool sunroofOpen = vehicleController.sunroofOpen;
+
+        bool doorsOpen =
+            vehicleController.driverSideDoor.boolValue ||
+            vehicleController.passengerSideDoor.boolValue ||
+            vehicleController.backLeftDoor.boolValue ||
+            vehicleController.backRightDoor.boolValue;
+
+        bool windowsOpen =
+            vehicleController.frontLeftWindow.isWindowOpen ||
+            vehicleController.frontRightWindow.isWindowOpen ||
+            vehicleController.backLeftWindow.isWindowOpen ||
+            vehicleController.backRightWindow.isWindowOpen;
+
+        if (playerInCab &&
+            (doorsOpen ||
+             (checkSunroof && sunroofOpen) ||
+             (checkWindows && windowsOpen) ||
+             (windshieldCheck && windshieldBroken)))
+            return false;
+
+        if (vehicleController.IsPlayerAttached(playerScript) &&
+            !playerInCab)
+            return false;
+
+        return true;
+    }
+
+    public override bool IsPlayerProtectedFromKnockback(PlayerControllerB playerScript)
+    {
+        return vehicleController != null && vehicleController.IsPlayerSeated(playerScript);
+    }
+
+    public override bool IsLocalPlayerSheltered()
+    {
+        return vehicleController != null && IsLocalPlayerInShelter();
     }
 }

@@ -6,12 +6,16 @@ using CompanyHauler.Utils;
 using GameNetcodeStuff;
 using ScandalsTweaks.Utils;
 using ScandalLib.Patches;
+using ScandalLib.Scripts;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.UI;
+using System.Runtime.CompilerServices;
+using ScandalLib.Interfaces;
+using System.Threading;
 
 namespace CompanyHauler.Scripts;
 
@@ -27,36 +31,36 @@ public class HaulerController : VehicleController
 
     [Header("Networking")]
 
-    private bool receivedSyncData;
+    private bool receivedClientSyncData;
 
-    public Vector2 syncedMoveInputVector;
     public bool syncedDrivePedalPressed;
     public bool syncedBrakePedalPressed;
 
-    internal bool syncedTyreSlipping;
-    internal float syncedTyreStress;
+    public float tyreStress;
+    public bool wheelSlipping;
+    public bool wheelSkidActive;
 
-    internal float syncedEngineRPM;
-    internal float syncedFrontWheelRPM;
-    internal float syncedBackWheelRPM;
-    internal float syncedWheelRPM;
+    public float syncedEngineRPM;
+    public float syncedFrontWheelRPM;
+    public float syncedBackWheelRPM;
+    public float syncedWheelRPM;
 
-    internal int syncedCarHP;
+    public int syncedCarHP;
 
-    internal float syncEffectsInterval;
-    internal float syncTorqueInterval;
-    internal float syncDrivetrainInterval;
+    public float syncEffectsInterval;
+    public float syncTorqueInterval;
+    public float syncDrivetrainInterval;
 
-    internal float syncedSteeringWheelRotation;
-    internal float syncedCurrentMotorTorque;
-    internal float syncedCurrentBrakeTorque;
+    public float syncedSteeringRotation;
+    public float syncedCurrentMotorTorque;
+    public float syncedCurrentBrakeTorque;
 
     private float syncedSongTime;
 
     [Header("Player")]
 
-    public HaulerPhysicsRegion vehicleZone = null!;
-    public HaulerPlayerZone vehicleCabZone = null!;
+    public ExtendedPhysicsRegion vehicleZone = null!;
+    public ExtendedPlayerZone vehicleCabZone = null!;
 
     public PlayerControllerB lastDriver = null!;
     public PlayerControllerB playerWhoShifted = null!;
@@ -89,23 +93,15 @@ public class HaulerController : VehicleController
 
     [Header("Physics")]
 
-    public HaulerWheelCollider frontLeftWheel = null!;
-    public HaulerWheelCollider frontRightWheel = null!;
-    public HaulerWheelCollider backLeftWheel = null!;
-    public HaulerWheelCollider backRightWheel = null!;
-
     public HaulerCollisionTrigger collisionTrigger = null!;
     public float timeSinceLastCollision;
 
     public List<WheelCollider> allWheels = null!;
-    public WheelHit[] wheelHits = new WheelHit[4];
+    private WheelHit[] wheelHits = new WheelHit[4];
 
     public Rigidbody playerPhysicsBody = null!;
 
     public AnimationCurve steeringCurve = null!;
-
-    public Vector3 previousVehiclePosition;
-    public Quaternion previousVehicleRotation;
 
     public AnimationCurve engineCurve = null!;
     public AnimationCurve enginePowerCurve = null!;
@@ -199,7 +195,7 @@ public class HaulerController : VehicleController
     [Header("VFX")]
 
     public TextMeshPro radioScreen = null!;
-    private Coroutine radioOnCoroutine = null!;
+    //private Coroutine radioOnCoroutine = null!;
 
     public Collider[] weatherEffectBlockers = null!;
 
@@ -211,11 +207,11 @@ public class HaulerController : VehicleController
     public GameObject keyItemHolder = null!;
     public Transform ignitionKeyPosition = null!;
 
-    private Vector3 ignitionKeyScale = new Vector3(1f, 1f, 1f);
-    private Vector3 keyPosLocal = new Vector3(0.05029682f, 0.1181492f, -0.09794867f);
-    private Vector3 keyPosServer = new Vector3(0.0414306f, 0.09218378f, -0.09290992f);
-    private Vector3 keyRotLocal = new Vector3(29.962f, -2.063f, -3.106f);
-    private Vector3 keyRotServer = new Vector3(29.427f, -5.158f, -53.66f);
+    private static readonly Vector3 ignitionKeyScale = new Vector3(1f, 1f, 1f);
+    private static readonly Vector3 keyPosLocal = new Vector3(0.05029682f, 0.1181492f, -0.09794867f);
+    private static readonly Vector3 keyPosServer = new Vector3(0.0414306f, 0.09218378f, -0.09290992f);
+    private static readonly Vector3 keyRotLocal = new Vector3(29.962f, -2.063f, -3.106f);
+    private static readonly Vector3 keyRotServer = new Vector3(29.427f, -5.158f, -53.66f);
 
     public HaulerWindow frontLeftWindow = null!;
     public HaulerWindow frontRightWindow = null!;
@@ -242,6 +238,9 @@ public class HaulerController : VehicleController
 
     public Transform speedometerTransform = null!;
     public Transform tachometerTransform = null!;
+
+    public Collider startIgnitionCollider = null!;
+    public Collider stopIgnitionCollider = null!;
 
     public float speedometerFloat;
     public float tachometerFloat;
@@ -292,11 +291,14 @@ public class HaulerController : VehicleController
     public AnimatedObjectTrigger windowWipers = null!;
     public bool automaticWipersOn;
 
+    private bool setAudiosMuted;
+
     public bool tailgateOpen;
 
     public bool sunroofOpen;
 
     public bool isCabinLightToggled;
+    public bool isCabinLightOn;
 
     public float playerSteeringWheelAnimFloat;
     public float syncedPlayerSteeringAnim;
@@ -309,7 +311,6 @@ public class HaulerController : VehicleController
     public bool disableAnimations;
     public bool inIgnitionAnimation;
     public bool ignitionOn;
-    public bool twistingKey;
 
     // animations
     internal const string STEERING_WHEEL_SPEED = "steeringWheelTurnSpeed";
@@ -320,11 +321,13 @@ public class HaulerController : VehicleController
     internal const string CAR_MOTION_TIME = "SA_CarMotionTime";
 
     // triggers
-    private readonly string DOOR_ENTER_HOVERTIP = "Use door : [LMB]";
-    private readonly string DOOR_EXIT_HOVERTIP = "Exit : [LMB]";
+    private const string DOOR_ENTER_HOVERTIP = "Use door : [LMB]";
+    private const string DOOR_EXIT_HOVERTIP = "Exit : [LMB]";
+
+    private const string HOOD_ANIMATION_BOOL = "hoodOpen";
 
     // player
-    private readonly string PLAYER_MOVEMENT = "Move";
+    private const string PLAYER_MOVEMENT = "Move";
 
     [Header("Destruction")]
 
@@ -339,6 +342,8 @@ public class HaulerController : VehicleController
     public GameObject backRightDoorContainer = null!;
 
     [Header("Audio")]
+
+    public AudioSource[] allVehicleAudios = null!;
 
     public AudioSource roofRainAudio = null!;
 
@@ -360,6 +365,21 @@ public class HaulerController : VehicleController
     public float radioPingTimestamp;
 
 
+    // Thanks TomatoBird8.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] // this replaces any calls to this method with the method body (the code in the method)
+    // static is for if you don't need the instance
+    public static bool IsInShipPhaseAndNotLoadingLevel()
+    {
+        return StartOfRound.Instance.inShipPhase && !StartOfRound.Instance.beganLoadingNewLevel;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] // this replaces any calls to this method with the method body (the code in the method)
+    public static bool IsInShipPhaseAndLoadingLevel()
+    {
+        return StartOfRound.Instance.inShipPhase &&
+               StartOfRound.Instance.beganLoadingNewLevel;
+    }
+
     public void OnEnable()
     {
         //ConfigureSubSteps(speedThreshold: 10f, stepsBelowThreshold: 20, stepsAboveThreshold: 10);
@@ -377,11 +397,12 @@ public class HaulerController : VehicleController
     // Additional things to do on awake
     public new void Awake()
     {
-        ragdollPhysicsBody.interpolation = RigidbodyInterpolation.Interpolate;
-        windwiperPhysicsBody1.interpolation = RigidbodyInterpolation.Interpolate;
-        windwiperPhysicsBody2.interpolation = RigidbodyInterpolation.Interpolate;
+        ragdollPhysicsBody.interpolation = RigidbodyInterpolation.None;
+        windwiperPhysicsBody1.interpolation = RigidbodyInterpolation.None;
+        windwiperPhysicsBody2.interpolation = RigidbodyInterpolation.None;
         playerPhysicsBody.interpolation = RigidbodyInterpolation.None;
-        playerPhysicsBody.freezeRotation = true;
+        playerPhysicsBody.constraints = RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezePositionZ | 
+                                        RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
         backDoorOpen = true; // hacky shit
         base.Awake();
 
@@ -416,7 +437,7 @@ public class HaulerController : VehicleController
         radioAudio.clip = radioClips[currentRadioClip];
         decals = new DecalProjector[24];
 
-        if (!StartOfRound.Instance.inShipPhase)
+        if (!StartOfRound.Instance.inShipPhase || IsInShipPhaseAndLoadingLevel())
             return;
 
         magnetedToShip = true;
@@ -430,13 +451,19 @@ public class HaulerController : VehicleController
     }
 
     // --- SYNC DATA ---
-    public void SendClientSyncData()
+    public void SendClientSyncData(ulong clientId)
     {
         if (magnetedToShip)
         {
             Vector3 eulerAngles = magnetTargetRotation.eulerAngles;
             MagnetCarRpc(magnetTargetPosition, eulerAngles, magnetStartPosition, magnetStartRotation, RoundManager.Instance.tempTransform.eulerAngles, averageVelocityAtMagnetStart);
         }
+        if (carDestroyed)
+        {
+            SyncDestroyedCarForClientRpc(carHP, RpcTarget.Single(clientId, RpcTargetUse.Temp));
+            return;
+        }
+        ClientSyncDataRpc(carHP, keyIsInIgnition, ignitionStarted, ignitionOn, isCabinLightOn, isCabinLightToggled, headlampsOn, windshieldBroken, (int)gear, EngineRPM, wheelRPM, frontWheelRPM, backWheelRPM, currentMotorTorque, currentBrakeTorque, radioOn, radioTurnedOnBefore, currentRadioClip, RpcTarget.Single(clientId, RpcTargetUse.Temp));
         /*
         ReceiveClientSyncDataRpc(
             setIgnition: ignitionStarted, setKeyInSlot: keyIsInIgnition, isIgnitionOn: isIgnitionOn,
@@ -453,6 +480,77 @@ public class HaulerController : VehicleController
             setCabinLight: frontCabinLightContainer.activeSelf,
             setCabinLightSwitch: cabLightToggled);
         */
+    }
+
+    [Rpc(SendTo.SpecifiedInParams, RequireOwnership = false)]
+    public void SyncDestroyedCarForClientRpc(int setCarHealth, RpcParams rpcParams = default)
+    {
+        if (receivedClientSyncData)
+        {
+            return;
+        }
+        receivedClientSyncData = true;
+        carHP = setCarHealth;
+        syncedCarHP = setCarHealth;
+        timeAtLastDamage = Time.realtimeSinceStartup;
+        DestroyCar();
+    }
+
+    [Rpc(SendTo.SpecifiedInParams, RequireOwnership = false)]
+    public void ClientSyncDataRpc(int setCarHealth, bool setKeyInSlot,
+        bool setStarted, bool setIgnitionOn,
+        bool setCabinLightOn, bool setCabinLightSwitch,
+        bool setHeadlightsOn, bool setWindowBroken,
+        int currentGear, float engineSpeed, float wheelSpeed, 
+        float frontWheelSpeed, float backWheelSpeed,
+        float setMotorTorque, float setBrakeTorque, 
+        bool setRadioOn, bool setRadioOnBefore,
+        int radioClip,
+        RpcParams rpcParams = default)
+    {
+        if (receivedClientSyncData)
+        {
+            return;
+        }
+        receivedClientSyncData = true;
+        if (!windshieldBroken && setWindowBroken)
+            BreakWindshield();
+        if (headlampsOn != setHeadlightsOn)
+        {
+            headlampsOn = setHeadlightsOn;
+            headlightsContainer.SetActive(setHeadlightsOn);
+            SetHeadlightMaterial(setHeadlightsOn);
+        }
+        if ((int)gear != currentGear)
+        {
+            timeAtLastGearShift = Time.realtimeSinceStartup;
+            gear = (CarGearShift)currentGear;
+        }
+        carHP = setCarHealth;
+        syncedCarHP = setCarHealth;
+        disableAnimations = !setStarted;
+        ignitionOn = setIgnitionOn;
+        SetIgnitionKeyValues(setKeyInHand: false, setKeyInSlot: setKeyInSlot);
+        isCabinLightToggled = setCabinLightSwitch;
+        SetIgnition(setStarted, setCabinLightOn);
+        SetDashboardGaugesOn(setIgnitionOn);
+        if (setStarted)
+        {
+            dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+        }
+        ignitionAnimator.SetInteger(IGNITION_ANIM, setStarted ? 1 : 0);
+        radioTurnedOnBefore = setRadioOnBefore;
+        currentRadioClip = radioClip;
+        if (!radioOn && setRadioOn)
+        {
+            SetRadioOnLocalClient(on: true, setClip: true);
+        }
+        currentMotorTorque = setMotorTorque;
+        currentBrakeTorque = setBrakeTorque;
+        syncedEngineRPM = engineSpeed;
+        syncedWheelRPM = wheelSpeed;
+        syncedFrontWheelRPM = frontWheelSpeed;
+        syncedBackWheelRPM = backWheelSpeed;
     }
 
     /*
@@ -497,34 +595,29 @@ public class HaulerController : VehicleController
 
         var particleTriggers = new[]
         {
-            ScandalsTweaks.Utils.References.rainParticles,
-            ScandalsTweaks.Utils.References.rainHitParticles,
-            ScandalsTweaks.Utils.References.stormyRainParticles,
-            ScandalsTweaks.Utils.References.stormyRainHitParticles,
-            ScandalsTweaks.Utils.References.wesleyHurricaneRainParticles,
-            ScandalsTweaks.Utils.References.wesleyHurricaneRainHitParticles,
-            ScandalsTweaks.Utils.References.wesleyHurricaneSandParticles,
-            ScandalsTweaks.Utils.References.wesleyForsakenRainParticles,
-            ScandalsTweaks.Utils.References.wesleyForsakenRainHitParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidRainParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidRainHitParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidStormyRainParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidStormyRainHitParticles
+            ScandalLib.Utils.References.rainParticles,
+            ScandalLib.Utils.References.rainHitParticles,
+            ScandalLib.Utils.References.stormyRainParticles,
+            ScandalLib.Utils.References.stormyRainHitParticles,
+            ScandalLib.Utils.References.wesleyHurricaneRainParticles,
+            ScandalLib.Utils.References.wesleyHurricaneRainHitParticles,
+            ScandalLib.Utils.References.wesleyHurricaneSandParticles,
+            ScandalLib.Utils.References.wesleyForsakenRainParticles,
+            ScandalLib.Utils.References.wesleyForsakenRainHitParticles,
+            ScandalLib.Utils.References.kenjiAcidRainParticles,
+            ScandalLib.Utils.References.kenjiAcidRainHitParticles,
+            ScandalLib.Utils.References.kenjiAcidStormyRainParticles,
+            ScandalLib.Utils.References.kenjiAcidStormyRainHitParticles
         };
-
-        for (int i = 0; i < particleTriggers.Length; i++)
+        foreach (var particle in particleTriggers)
         {
-            if (particleTriggers[i] == null)
-            {
-                Plugin.LogDebug("Weather particle or Trigger is null!");
+            if (particle == null)
                 continue;
-            }
-
-            var trigger = particleTriggers[i]!.trigger;
-            for (int j = 0; j < weatherEffectBlockers.Length; j++)
+            var trigger = particle.trigger;
+            foreach (var blocker in weatherEffectBlockers)
             {
-                int index = trigger.colliderCount + j;
-                trigger.SetCollider(index, weatherEffectBlockers[j]);
+                if (blocker != null)
+                    trigger.AddCollider(blocker);
             }
         }
         yield break;
@@ -567,8 +660,9 @@ public class HaulerController : VehicleController
         if (gear == (CarGearShift)setGear)
             return;
 
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         timeAtLastGearShift = Time.realtimeSinceStartup;
-        playerWhoShifted = GameNetworkManager.Instance.localPlayerController;
+        playerWhoShifted = playerController;
         int gearAudioIndex = 0;
         if (setGear != (int)CarGearShift.Park)
         {
@@ -576,14 +670,15 @@ public class HaulerController : VehicleController
         }
         gear = (CarGearShift)setGear;
         gearStickAudio.PlayOneShot(gearStickAudios[gearAudioIndex]);
-        ShiftToGearRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId, setGear, gearAudioIndex);
+        ShiftToGearRpc((int)playerController.playerClientId, setGear, gearAudioIndex);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void ShiftToGearRpc(int playerId, int setGear, int gearIndex)
     {
+        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
         timeAtLastGearShift = Time.realtimeSinceStartup;
-        playerWhoShifted = StartOfRound.Instance.allPlayerScripts[playerId];
+        playerWhoShifted = playerController;
         gear = (CarGearShift)setGear;
         gearStickAudio.PlayOneShot(gearStickAudios[gearIndex]);
     }
@@ -595,6 +690,7 @@ public class HaulerController : VehicleController
         if (setOn && isCabinLightToggled)
             return;
 
+        isCabinLightOn = setOn;
         frontCabinLightContainer.SetActive(setOn);
         frontCabinLightMesh.material = setOn ? headlightsOnMat : headlightsOffMat;
     }
@@ -609,14 +705,14 @@ public class HaulerController : VehicleController
     {
         isCabinLightToggled = !isCabinLightToggled;
         ToggleCabinLightsLocalClient(setToggle: isCabinLightToggled, ignitionOn);
-        ToggleCabinLightsRpc(setToggle: isCabinLightToggled, ignitionOn);
+        ToggleCabinLightsRpc(setToggle: isCabinLightToggled, isIgnitionOn: ignitionOn);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void ToggleCabinLightsRpc(bool setToggle, bool isIgnitionOn)
     {
         isCabinLightToggled = setToggle;
-        ToggleCabinLightsLocalClient(setToggle: isCabinLightToggled, isIgnitionOn);
+        ToggleCabinLightsLocalClient(setToggle: isCabinLightToggled, isIgnitionOn: isIgnitionOn);
     }
 
     public void ToggleCabinLightsLocalClient(bool setToggle, bool isIgnitionOn)
@@ -633,8 +729,10 @@ public class HaulerController : VehicleController
     // --- TRY IGNITION METHOD ---
     public new void StartTryCarIgnition()
     {
-        if (!localPlayerInControl ||
-            ignitionStarted ||
+        if (!localPlayerInControl)
+            return;
+
+        if (ignitionStarted ||
             inIgnitionAnimation ||
             (inIgnitionAnimation && startIgnitionTrigger.isBeingHeldByPlayer))
             return;
@@ -643,7 +741,9 @@ public class HaulerController : VehicleController
         disableAnimations = true;
         inIgnitionAnimation = true;
         keyIgnitionCoroutine = StartCoroutine(TryIgnition(isLocalDriver: true));
-        TryIgnitionRpc(keyIsInIgnition, ignitionOn);
+        TryIgnitionRpc(
+            setKeyInSlot: keyIsInIgnition, 
+            isIgnitionOn: ignitionOn);
     }
 
     private new IEnumerator TryIgnition(bool isLocalDriver)
@@ -655,37 +755,40 @@ public class HaulerController : VehicleController
         }
         if (keyIsInIgnition)
         {
-            SetIgnitionValues(keyTwisting: false, keyInHand: true, keyInSlot: true);
+            SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
             currentDriver.playerBodyAnimator.SetInteger(CAR_ANIM, 12);
             ignitionAnimator.SetInteger(IGNITION_ANIM, 12);
             yield return new WaitForSeconds(0.02f);
             carKeyAudio.PlayOneShot(twistKey);
-            SetIgnitionValues(keyTwisting: true, keyInHand: true, keyInSlot: true);
+            SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
             yield return new WaitForSeconds(0.1467f);
         }
         else
         {
-            SetIgnitionValues(keyTwisting: false, keyInHand: true, keyInSlot: false);
+            SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: false);
             currentDriver.playerBodyAnimator.SetInteger(CAR_ANIM, 2);
             ignitionAnimator.SetInteger(IGNITION_ANIM, 2);
             yield return new WaitForSeconds(0.6f);
             carKeyAudio.PlayOneShot(insertKey);
-            SetIgnitionValues(keyTwisting: false, keyInHand: true, keyInSlot: true);
+            SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
             yield return new WaitForSeconds(0.2f);
             carKeyAudio.PlayOneShot(twistKey);
-            SetIgnitionValues(keyTwisting: true, keyInHand: true, keyInSlot: true);
+            SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
             yield return new WaitForSeconds(0.18f);
         }
-        SetIgnitionValues(keyTwisting: true, keyInHand: true, keyInSlot: true);
+        SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
         if (!isLocalDriver) yield break;
         bool shiftInterlock = gear == CarGearShift.Park;
         if (shiftInterlock) PlayIgnitionAudio();
-        ignitionOn = true;
-        if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+        if (!ignitionOn)
         {
-            dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            ignitionOn = true;
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
         }
-        SetIgnitionValues(keyTwisting: true, keyInHand: true, keyInSlot: true);
+        SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
         SetFrontCabinLightOn(setOn: ignitionOn);
         SetDashboardGaugesOn(on: true);
         TryStartIgnitionRpc(shiftInterlock);
@@ -693,14 +796,13 @@ public class HaulerController : VehicleController
         yield return new WaitForSeconds(UnityEngine.Random.Range(0.7f, 1.4f));
         if ((float)UnityEngine.Random.Range(0, 100) < chanceToStartIgnition)
         {
+            CancelIgnitionAnimation(isStarted: true, setIgnitionAnim: true);
+            disableAnimations = false;
             inIgnitionAnimation = false;
-            ignitionOn = true;
             currentDriver?.playerBodyAnimator.SetInteger(CAR_ANIM, 1);
-            SetIgnitionValues(keyTwisting: false, keyInHand: false, keyInSlot: true);
+            SetIgnitionKeyValues(setKeyInHand: false, setKeyInSlot: true);
             SetIgnition(setStarted: true, setCabinLight: true);
-            SetFrontCabinLightOn(setOn: ignitionOn);
             SetDashboardGaugesOn(on: true);
-            CancelIgnitionAnimation(ignitionOn: true, setIgnitionAnim: true);
             StartIgnitionRpc();
         }
         else
@@ -711,34 +813,38 @@ public class HaulerController : VehicleController
         yield break;
     }
 
-    [Rpc(SendTo.NotMe, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void TryIgnitionRpc(bool setKeyInSlot, bool isIgnitionOn)
     {
-        if (ignitionStarted)
-            return;
-
         CancelIgnitionCoroutine();
         disableAnimations = true;
         inIgnitionAnimation = true;
-        SetIgnitionValues(keyTwisting: false, keyInHand: false, keyInSlot: setKeyInSlot);
+        SetIgnitionKeyValues(setKeyInHand: false, setKeyInSlot: setKeyInSlot);
         if (ignitionOn != isIgnitionOn)
         {
             ignitionOn = isIgnitionOn;
-            SetFrontCabinLightOn(ignitionOn);
+            SetFrontCabinLightOn(setOn: isIgnitionOn);
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
         }
         keyIgnitionCoroutine = StartCoroutine(TryIgnition(isLocalDriver: false));
     }
 
-    [Rpc(SendTo.NotMe, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void TryStartIgnitionRpc(bool shiftInterlock)
     {
         if (shiftInterlock) PlayIgnitionAudio();
-        ignitionOn = true;
-        if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+        if (!ignitionOn)
         {
-            dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            ignitionOn = true;
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
         }
-        SetIgnitionValues(keyTwisting: true, keyInHand: true, keyInSlot: true);
+        SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: true);
         SetFrontCabinLightOn(setOn: ignitionOn);
         SetDashboardGaugesOn(on: true);
     }
@@ -762,23 +868,26 @@ public class HaulerController : VehicleController
     // --- CANCEL IGNITION METHOD ---
     public new void CancelTryCarIgnition()
     {
-        if (!localPlayerInControl ||
-            ignitionStarted ||
+        if (!localPlayerInControl)
+            return;
+
+        if (ignitionStarted ||
             !inIgnitionAnimation ||
             (!inIgnitionAnimation && startIgnitionTrigger.isBeingHeldByPlayer))
             return;
 
-        PlayerControllerB localPlayer = GameNetworkManager.Instance.localPlayerController;
-        int playerAnimIndex = localPlayer.playerBodyAnimator.GetInteger(CAR_ANIM);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        int playerAnimIndex = playerController.playerBodyAnimator.GetInteger(CAR_ANIM);
         if (playerAnimIndex == 0 && keyIsInIgnition)
-            localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, 13);
+            playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 13);
         else if ((playerAnimIndex == 2 || playerAnimIndex == 12) && keyIsInIgnition)
-            localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, 3);
+            playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 3);
         else
-            localPlayer.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        int playerCarAnimIndex = localPlayer.playerBodyAnimator.GetInteger(CAR_ANIM);
+            playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        int playerCarAnimIndex = playerController.playerBodyAnimator.GetInteger(CAR_ANIM);
 
-        CancelIgnitionAnimation(ignitionOn: false, setIgnitionAnim: false);
+        CancelIgnitionAnimation(isStarted: false, setIgnitionAnim: false);
+        carEngine1AudioActive = false;
         disableAnimations = true;
         inIgnitionAnimation = false;
 
@@ -786,30 +895,34 @@ public class HaulerController : VehicleController
         if (playerAnimIndex == 13) ignitionAnimIndex = 3;
         ignitionAnimator.SetInteger(IGNITION_ANIM, ignitionAnimIndex);
 
-        CancelTryIgnitionRpc(keyIsInIgnition, ignitionOn, playerCarAnimIndex, ignitionAnimIndex);
+        CancelTryIgnitionRpc(
+            setKeyInSlot: keyIsInIgnition, 
+            isIgnitionOn: ignitionOn, 
+            playerAnimIndex: playerCarAnimIndex, 
+            ignitionAnimIndex: ignitionAnimIndex);
     }
 
-    [Rpc(SendTo.NotMe, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void CancelTryIgnitionRpc(bool setKeyInSlot, bool isIgnitionOn, int playerAnimIndex, int ignitionAnimIndex)
     {
-        CancelIgnitionAnimation(ignitionOn: false, setIgnitionAnim: false);
+        CancelIgnitionAnimation(isStarted: false, setIgnitionAnim: false);
+        carEngine1AudioActive = false;
         disableAnimations = true;
         inIgnitionAnimation = false;
 
         currentDriver?.playerBodyAnimator.SetInteger(CAR_ANIM, playerAnimIndex);
         ignitionAnimator.SetInteger(IGNITION_ANIM, ignitionAnimIndex);
 
-        // account for netlag when the key is first inserted
         if (setKeyInSlot && !keyIsInIgnition)
         {
             carKeyAudio.PlayOneShot(insertKey);
         }
-        SetIgnitionValues(keyTwisting: false, keyInHand: false, keyInSlot: setKeyInSlot);
+        SetIgnitionKeyValues(setKeyInHand: false, setKeyInSlot: setKeyInSlot);
         SetDashboardGaugesOn(on: isIgnitionOn);
         if (ignitionOn != isIgnitionOn)
         {
             ignitionOn = isIgnitionOn;
-            SetFrontCabinLightOn(ignitionOn);
+            SetFrontCabinLightOn(setOn: ignitionOn);
             if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
             {
                 dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
@@ -819,44 +932,51 @@ public class HaulerController : VehicleController
 
 
     // --- START IGNITION METHOD ---
-    [Rpc(SendTo.NotMe, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void StartIgnitionRpc()
     {
+        CancelIgnitionAnimation(isStarted: true, setIgnitionAnim: true);
         disableAnimations = false;
         inIgnitionAnimation = false;
         currentDriver?.playerBodyAnimator.SetInteger(CAR_ANIM, 1);
-        SetIgnitionValues(keyTwisting: false, keyInHand: false, keyInSlot: true);
+        SetIgnitionKeyValues(setKeyInHand: false, setKeyInSlot: true);
         SetIgnition(setStarted: true, setCabinLight: true);
-        SetFrontCabinLightOn(setOn: ignitionOn);
+        if (!ignitionOn)
+        {
+            ignitionOn = true;
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
+        }
         SetDashboardGaugesOn(on: true);
-        CancelIgnitionAnimation(ignitionOn: true, setIgnitionAnim: true);
     }
 
     public void SetIgnition(bool setStarted, bool setCabinLight)
     {
         SetFrontCabinLightOn(setCabinLight);
+        if (ignitionStarted == setStarted)
+        {
+            return;
+        }
+        ignitionStarted = setStarted;
         carEngine1AudioActive = setStarted;
         if (setStarted)
         {
-            disableAnimations = false;
-            inIgnitionAnimation = false;
-
-            startKeyIgnitionTrigger.SetActive(false);
-            removeKeyIgnitionTrigger.SetActive(true);
-
-            if (setStarted == ignitionStarted)
-                return;
-
-            ignitionStarted = true;
+            startIgnitionCollider.enabled = false;
+            stopIgnitionCollider.enabled = true;
+            startIgnitionTrigger.currentCooldownValue = startIgnitionTrigger.cooldownTime;
+            stopIgnitionTrigger.currentCooldownValue = stopIgnitionTrigger.cooldownTime;
             carExhaustParticle.Play();
             engineAudio1.Stop();
             engineAudio1.PlayOneShot(engineStartSuccessful);
             engineAudio1.clip = engineRun;
             return;
         }
-        startKeyIgnitionTrigger.SetActive(true);
-        removeKeyIgnitionTrigger.SetActive(false);
-        ignitionStarted = false;
+        startIgnitionCollider.enabled = true;
+        stopIgnitionCollider.enabled = false;
+        startIgnitionTrigger.currentCooldownValue = startIgnitionTrigger.cooldownTime;
+        stopIgnitionTrigger.currentCooldownValue = stopIgnitionTrigger.cooldownTime;
         carExhaustParticle.Stop(true, ParticleSystemStopBehavior.StopEmitting);
     }
 
@@ -864,11 +984,10 @@ public class HaulerController : VehicleController
     // --- REMOVE IGNITION METHOD ---
     public new void RemoveKeyFromIgnition()
     {
-        if (!localPlayerInControl ||
-            !ignitionStarted)
+        if (!localPlayerInControl)
             return;
 
-        if (inIgnitionAnimation)
+        if (!ignitionStarted || inIgnitionAnimation)
             return;
 
         CancelIgnitionCoroutine();
@@ -882,9 +1001,11 @@ public class HaulerController : VehicleController
         disableAnimations = true;
         inIgnitionAnimation = false;
         currentDriver?.playerBodyAnimator.SetInteger(CAR_ANIM, 6);
+        playerSteeringWheelAnimFloat = 0.5f;
+        syncedPlayerSteeringAnim = 0.5f;
         ignitionAnimator.SetInteger(IGNITION_ANIM, 6);
         yield return new WaitForSeconds(0.28f);
-        SetIgnitionValues(keyTwisting: false, keyInHand: true, keyInSlot: false);
+        SetIgnitionKeyValues(setKeyInHand: true, setKeyInSlot: false);
         carKeyAudio.PlayOneShot(removeKey);
         SetIgnition(setStarted: false, setCabinLight: false);
         ignitionOn = false;
@@ -892,33 +1013,30 @@ public class HaulerController : VehicleController
         CancelDashboardSweep();
         SetDashboardGaugesOn(on: false);
         yield return new WaitForSeconds(0.73f);
-        SetIgnitionValues(keyTwisting: false, keyInHand: false, keyInSlot: false);
+        SetIgnitionKeyValues(setKeyInHand: false, setKeyInSlot: false);
+        currentDriver?.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         keyIgnitionCoroutine = null;
         yield break;
     }
 
-    [Rpc(SendTo.NotMe, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void RemoveKeyFromIgnitionRpc()
     {
-        if (!ignitionStarted)
-            return;
-
         CancelIgnitionCoroutine();
         keyIgnitionCoroutine = StartCoroutine(RemoveKey());
+        chanceToStartIgnition = 10f;
     }
 
 
     // --- MISC IGNITION STUFF ---
-    public void CancelIgnitionAnimation(bool ignitionOn, bool setIgnitionAnim)
+    public void CancelIgnitionAnimation(bool isStarted = false, bool setIgnitionAnim = false)
     {
         CancelIgnitionCoroutine();
-        carEngine1AudioActive = ignitionOn;
-        twistingKey = false;
         keyIsInDriverHand = false;
-        if (setIgnitionAnim) ignitionAnimator.SetInteger(IGNITION_ANIM, ignitionOn ? 1 : 0);
+        if (setIgnitionAnim) ignitionAnimator.SetInteger(IGNITION_ANIM, isStarted ? 1 : 0);
     }
 
-    internal void CancelIgnitionCoroutine()
+    public void CancelIgnitionCoroutine()
     {
         if (keyIgnitionCoroutine != null)
         {
@@ -927,11 +1045,10 @@ public class HaulerController : VehicleController
         }
     }
 
-    public void SetIgnitionValues(bool keyTwisting, bool keyInHand, bool keyInSlot)
+    public void SetIgnitionKeyValues(bool setKeyInHand, bool setKeyInSlot)
     {
-        twistingKey = keyTwisting;
-        keyIsInDriverHand = keyInHand;
-        keyIsInIgnition = keyInSlot;
+        keyIsInDriverHand = setKeyInHand;
+        keyIsInIgnition = setKeyInSlot;
     }
 
 
@@ -944,10 +1061,14 @@ public class HaulerController : VehicleController
 
     // --- CANCEL OCCUPANT METHOD ---
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void CancelSetPlayerInVehicleRpc(int playerId)
+    public void CancelSetPlayerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (GameNetworkManager.Instance.localPlayerController != playerController)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("CancelSetPlayerInVehicleRpc failed to find player reference from network behaviour!");
+            return;
+        }
+        if (!VehicleUtils.IsPlayerLocal(playerController))
             return;
         InteractTriggerPatches.CancelVehicleSeatInteraction();
     }
@@ -956,19 +1077,22 @@ public class HaulerController : VehicleController
     // --- DRIVER OCCUPANT METHODS ---
     public void SetDriverInVehicle()
     {
-        SetDriverInVehicleServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
+        SetDriverInVehicleServerRpc(GameNetworkManager.Instance.localPlayerController);
     }
 
     [Rpc(SendTo.Server, RequireOwnership = false)]
-    protected void SetDriverInVehicleServerRpc(int playerId, RpcParams rpcParams = default)
+    public void SetDriverInVehicleServerRpc(NetworkBehaviourReference playerNetObjRef, RpcParams rpcParams = default)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null ||
-            playerController.isPlayerDead ||
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("SetDriverInVehicleServerRpc failed to find player reference from network behaviour!");
+            return;
+        }
+        if (playerController.isPlayerDead ||
             !playerController.isPlayerControlled ||
             currentDriver != null)
         {
-            CancelSetPlayerInVehicleRpc(playerId);
+            CancelSetPlayerInVehicleRpc(playerNetObjRef);
             return;
         }
         currentDriver = playerController;
@@ -977,56 +1101,119 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Owner, RequireOwnership = false)]
-    protected void SetDriverInVehicleOwnerRpc()
+    public void SetDriverInVehicleOwnerRpc()
     {
         frontLeftSeat.SetLocalPlayerIntoSeat();
+        ActivateControl();
         disableAnimations = !ignitionStarted;
         inIgnitionAnimation = false;
-        ActivateControl();
         SetTriggerHoverTip(driverSideDoorTrigger, DOOR_EXIT_HOVERTIP);
         startIgnitionTrigger.isBeingHeldByPlayer = false;
         stopIgnitionTrigger.isBeingHeldByPlayer = false;
-        CancelIgnitionCoroutine();
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        CancelIgnitionAnimation(ignitionStarted, true);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        if (ignitionStarted) playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 1);
+        else playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        int playerAnimIndex = playerController.playerBodyAnimator.GetInteger(CAR_ANIM);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         playerSteeringWheelAnimFloat = 0.5f;
         syncedPlayerSteeringAnim = 0.5f;
-        if (ignitionStarted) GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 1);
-        else GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        int playerAnimIndex = GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.GetInteger(CAR_ANIM);
-        if (driverSideDoor.boolValue) driverSideDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
-        if (!setControlTips)
+        if (ignitionOn && (dashboardSweepCoroutine == null && !hasSweepedDashboard))
         {
-            setControlTips = true;
-            HUDManager.Instance.ChangeControlTipMultiple(carTooltips, false, null);
+            dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
         }
-        SetDriverInVehicleNotOwnerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId, ignitionOn, keyIsInIgnition, ignitionStarted, playerAnimIndex);
+        else if (!ignitionOn && (dashboardSweepCoroutine != null || hasSweepedDashboard))
+        {
+            CancelDashboardSweep();
+        }
+        SetIgnition(ignitionStarted, ignitionOn);
+        SetDashboardGaugesOn(on: ignitionOn);
+        if (driverSideDoor.boolValue) driverSideDoor.TriggerAnimation(playerController);
+        SetHudTooltips();
+        SetDriverInVehicleNotOwnerRpc(
+            playerController,
+            ignitionOn,
+            keyIsInIgnition,
+            ignitionStarted,
+            playerAnimIndex);
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void SetDriverInVehicleNotOwnerRpc(int playerId, bool isIgnitionOn, bool setKeyInSlot, bool setStarted, int playerAnimIndex)
+    private string GetBindingKey(InputAction action)
     {
-        PlayerControllerB playerObj = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerObj == null)
+        string group = StartOfRound.Instance.localPlayerUsingController
+            ? "Gamepad"
+            : "KeyboardAndMouse";
+
+        string binding = action.GetBindingDisplayString(group: group);
+        return string.IsNullOrEmpty(binding) ||
+               binding.Contains("Not-Bound")
+            ? "Unbound"
+            : binding;
+    }
+
+    private void SetHudTooltips()
+    {
+        if (setControlTips)
+            return;
+
+        VehicleControls vehicleControls = Plugin.VehicleControlsInstance;
+        string gasKey = GetBindingKey(vehicleControls.GasPedalKey);
+        string brakeKey = GetBindingKey(vehicleControls.BrakePedalKey);
+        string jumpKey = GetBindingKey(vehicleControls.JumpKey);
+
+        carTooltips = new string[3]
         {
-            Plugin.LogError("SetDriverInVehicleNotOwnerRpc failed to find player object reference from player client id!");
+            $"Gas pedal : [{gasKey}]",
+            $"Brake pedal : [{brakeKey}]",
+            $"Boost : [{jumpKey}]",
+        };
+
+        HUDManager.Instance.ChangeControlTipMultiple(carTooltips, false, null);
+        setControlTips = true;
+    }
+
+    [Rpc(SendTo.NotOwner)]
+    public void SetDriverInVehicleNotOwnerRpc(NetworkBehaviourReference playerNetObjRef, bool isIgnitionOn, bool setKeyInSlot, bool setStarted, int playerAnimIndex)
+    {
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("SetDriverInVehicleNotOwnerRpc failed to find player reference from network behaviour!");
             return;
         }
-        currentDriver = playerObj;
+        currentDriver = playerController;
+        driverSeatTrigger.interactable = false;
+        frontLeftSeat.SetPlayerAnimations(playerController, false);
+        drivePedalPressed = false;
+        brakePedalPressed = false;
         disableAnimations = !setStarted;
         inIgnitionAnimation = false;
-        frontLeftSeat.SetPlayerAnimations(playerObj, false);
         startIgnitionTrigger.isBeingHeldByPlayer = false;
         stopIgnitionTrigger.isBeingHeldByPlayer = false;
-        CancelIgnitionCoroutine();
-        playerObj.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        CancelIgnitionAnimation(setStarted, true);
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, playerAnimIndex);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        steeringAnimValue = 0f;
         playerSteeringWheelAnimFloat = 0.5f;
         syncedPlayerSteeringAnim = 0.5f;
-        SetDashboardGaugesOn(on: gaugesOn);
-        ignitionOn = isIgnitionOn;
-        SetFrontCabinLightOn(setOn: isIgnitionOn);
         keyIsInIgnition = setKeyInSlot;
-        ignitionStarted = setStarted;
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, playerAnimIndex);
+        if (isIgnitionOn && !ignitionOn)
+        {
+            ignitionOn = true;
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
+        }
+        else if (!isIgnitionOn && ignitionOn)
+        {
+            ignitionOn = false;
+            if (dashboardSweepCoroutine != null || hasSweepedDashboard)
+            {
+                CancelDashboardSweep();
+            }
+        }
+        SetIgnition(setStarted, isIgnitionOn);
+        SetDashboardGaugesOn(on: isIgnitionOn);
     }
 
     public void OnDriverExitVehicle()
@@ -1037,25 +1224,37 @@ public class HaulerController : VehicleController
         {
             return;
         }
-        if (currentDriver != GameNetworkManager.Instance.localPlayerController)
+        if (!VehicleUtils.IsPlayerLocal(currentDriver))
         {
             return;
         }
-        localPlayerInControl = false;
-        SetTriggerHoverTip(driverSideDoorTrigger, DOOR_ENTER_HOVERTIP);
+        DisableControl();
         disableAnimations = !ignitionStarted;
         inIgnitionAnimation = false;
+        SetTriggerHoverTip(driverSideDoorTrigger, DOOR_ENTER_HOVERTIP);
         startIgnitionTrigger.isBeingHeldByPlayer = false;
         stopIgnitionTrigger.isBeingHeldByPlayer = false;
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        DisableControl();
-        CancelIgnitionAnimation(ignitionOn: ignitionStarted, setIgnitionAnim: true);
-        SetIgnition(setStarted: ignitionStarted, setCabinLight: ignitionOn);
+        CancelIgnitionAnimation(ignitionStarted, true);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        playerSteeringWheelAnimFloat = 0.5f;
+        syncedPlayerSteeringAnim = 0.5f;
+        if (ignitionOn && (dashboardSweepCoroutine == null && !hasSweepedDashboard))
+        {
+            dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+        }
+        else if (!ignitionOn && (dashboardSweepCoroutine != null || hasSweepedDashboard))
+        {
+            CancelDashboardSweep();
+        }
+        SetIgnition(ignitionStarted, ignitionOn);
+        SetDashboardGaugesOn(on: ignitionOn);
         chanceToStartIgnition = 10f;
         syncedPosition = transform.position;
         syncedRotation = transform.rotation;
         OnDriverExitVehicleServerRpc(
-            (int)GameNetworkManager.Instance.localPlayerController.playerClientId,
+            playerController,
             syncedPosition,
             syncedRotation,
             keyIsInIgnition,
@@ -1064,44 +1263,62 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Server)]
-    public void OnDriverExitVehicleServerRpc(int playerId, Vector3 carLocation, Quaternion carRotation, bool setKeyInSlot, bool engineStarted, bool isIgnitionOn)
+    public void OnDriverExitVehicleServerRpc(NetworkBehaviourReference playerNetObjRef, Vector3 carLocation, Quaternion carRotation, bool setKeyInSlot, bool setStarted, bool isIgnitionOn)
     {
-        OnDriverExitVehicleRpc(playerId, carLocation, carRotation, setKeyInSlot, engineStarted, isIgnitionOn);
+        OnDriverExitVehicleRpc(playerNetObjRef, carLocation, carRotation, setKeyInSlot, setStarted, isIgnitionOn);
         NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);
     }
 
     [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void OnDriverExitVehicleRpc(int playerId, Vector3 carLocation, Quaternion carRotation, bool setKeyInSlot, bool setStarted, bool isIgnitionOn)
+    public void OnDriverExitVehicleRpc(NetworkBehaviourReference playerNetObjRef, Vector3 carLocation, Quaternion carRotation, bool setKeyInSlot, bool setStarted, bool isIgnitionOn)
     {
-        PlayerControllerB playerObj = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerObj == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("OnDriverExitVehicleRpc failed to find player object reference from player client id!");
+            Plugin.LogError("OnDriverExitVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        if (GameNetworkManager.Instance.localPlayerController == playerObj)
+        if (VehicleUtils.IsPlayerLocal(playerController))
         {
-            Plugin.LogDebug("OnDriverExitVehicleRpc player argument was the previous occupant!");
+            Plugin.LogDebug("OnDriverExitVehicleRpc player argument was the previous occupant.");
             return;
         }
         syncedPosition = carLocation;
         syncedRotation = carRotation;
+        frontLeftSeat.ReturnPlayerAnimations(playerController, false);
+        currentDriver = null;
+        driverSeatTrigger.interactable = true;
         drivePedalPressed = false;
         brakePedalPressed = false;
-        currentDriver = null;
-        frontLeftSeat.ReturnPlayerAnimations(playerObj, false);
-        keyIsInIgnition = setKeyInSlot;
-        ignitionStarted = setStarted;
-        if (setStarted && !carExhaustParticle.isEmitting) carExhaustParticle.Play();
-        else if (!setStarted && carExhaustParticle.isEmitting) carExhaustParticle.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         disableAnimations = !setStarted;
         inIgnitionAnimation = false;
         startIgnitionTrigger.isBeingHeldByPlayer = false;
         stopIgnitionTrigger.isBeingHeldByPlayer = false;
-        CancelIgnitionAnimation(ignitionOn: setStarted, setIgnitionAnim: true);
-        SetIgnition(setStarted: setStarted, setCabinLight: isIgnitionOn);
-        SetDashboardGaugesOn(on: isIgnitionOn);
+        CancelIgnitionAnimation(setStarted, true);
         chanceToStartIgnition = 10f;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        steeringAnimValue = 0f;
+        playerSteeringWheelAnimFloat = 0.5f;
+        syncedPlayerSteeringAnim = 0.5f;
+        keyIsInIgnition = setKeyInSlot;
+        if (isIgnitionOn && !ignitionOn)
+        {
+            ignitionOn = true;
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
+        }
+        else if (!isIgnitionOn && ignitionOn)
+        {
+            ignitionOn = false;
+            if (dashboardSweepCoroutine != null || hasSweepedDashboard)
+            {
+                CancelDashboardSweep();
+            }
+        }
+        SetIgnition(setStarted, isIgnitionOn);
+        SetDashboardGaugesOn(on: isIgnitionOn);
     }
 
     public new void ExitDriverSideSeat()
@@ -1109,34 +1326,37 @@ public class HaulerController : VehicleController
         if (!localPlayerInControl)
             return;
 
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         int exitPoint = CanExitVehicle(exitPoints: driverSideExitPoints);
-        if (exitPoint == 0) if (!driverSideDoor.boolValue) driverSideDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        if (exitPoint == 0) if (!driverSideDoor.boolValue) driverSideDoor.TriggerAnimation(playerController);
         if (exitPoint != -1)
         {
-            GameNetworkManager.Instance.localPlayerController.TeleportPlayer(driverSideExitPoints[exitPoint].position);
+            playerController.TeleportPlayer(driverSideExitPoints[exitPoint].position);
             return;
         }
-        GameNetworkManager.Instance.localPlayerController.TeleportPlayer(driverSideExitPoints[1].position);
+        playerController.TeleportPlayer(driverSideExitPoints[1].position);
     }
 
 
     // --- PASSENGER OCCUPANT METHODS ---
     public void SetPassengerInVehicle()
     {
-        SetPassengerInVehicleServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
+        SetPassengerInVehicleServerRpc(GameNetworkManager.Instance.localPlayerController);
     }
 
     [Rpc(SendTo.Server, RequireOwnership = false)]
-    protected void SetPassengerInVehicleServerRpc(int playerId, RpcParams rpcParams = default)
+    public void SetPassengerInVehicleServerRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null ||
-            playerController.isPlayerDead ||
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("SetPassengerInVehicleServerRpc failed to find player reference from network behaviour!");
+            return;
+        }
+        if (playerController.isPlayerDead ||
             !playerController.isPlayerControlled ||
             currentPassenger != null)
         {
-            CancelSetPlayerInVehicleRpc(playerId);
+            CancelSetPlayerInVehicleRpc(playerNetObjRef);
             return;
         }
         currentPassenger = playerController;
@@ -1144,27 +1364,29 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    protected void SetPassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
+    public void SetPassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("SetPassengerInVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("SetPassengerInVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        if (playerObj == GameNetworkManager.Instance.localPlayerController)
+        PlayerControllerB localPlayerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        if (playerController == localPlayerController)
         {
             frontRightSeat.SetLocalPlayerIntoSeat();
             localPlayerInPassengerSeat = true;
             SetTriggerHoverTip(passengerSideDoorTrigger, DOOR_EXIT_HOVERTIP);
-            if (passengerSideDoor.boolValue) passengerSideDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+            if (passengerSideDoor.boolValue) passengerSideDoor.TriggerAnimation(localPlayerController);
         }
         else
         {
-            frontRightSeat.SetPlayerAnimations(playerObj, false);
+            passengerSeatTrigger.interactable = false;
+            frontRightSeat.SetPlayerAnimations(playerController, false);
         }
-        currentPassenger = playerObj;
-        playerObj.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        currentPassenger = playerController;
     }
 
     public void OnPassengerExitVehicle()
@@ -1175,29 +1397,35 @@ public class HaulerController : VehicleController
         {
             return;
         }
-        if (currentPassenger != GameNetworkManager.Instance.localPlayerController)
+        if (!VehicleUtils.IsPlayerLocal(currentPassenger))
         {
             return;
         }
         localPlayerInPassengerSeat = false;
         SetTriggerHoverTip(passengerSideDoorTrigger, DOOR_ENTER_HOVERTIP);
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         currentPassenger = null;
-        OnPassengerExitVehicleRpc(GameNetworkManager.Instance.localPlayerController, GameNetworkManager.Instance.localPlayerController.transform.position);
+        OnPassengerExitVehicleRpc(
+            playerController,
+            playerController.transform.position);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void OnPassengerExitVehicleRpc(NetworkBehaviourReference playerNetObjRef, Vector3 exitPoint)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("OnPassengerExitVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("OnPassengerExitVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        frontRightSeat.ReturnPlayerAnimations(playerObj, false);
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        playerObj.TeleportPlayer(exitPoint, false, 0f, false, true);
+        frontRightSeat.ReturnPlayerAnimations(playerController, false);
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        playerController.TeleportPlayer(exitPoint, false, 0f, false, true);
         currentPassenger = null;
+        passengerSeatTrigger.interactable = true;
     }
 
     public new void ExitPassengerSideSeat()
@@ -1205,34 +1433,37 @@ public class HaulerController : VehicleController
         if (!localPlayerInPassengerSeat)
             return;
 
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         int exitPoint = CanExitVehicle(exitPoints: passengerSideExitPoints);
-        if (exitPoint == 0) if (!passengerSideDoor.boolValue) passengerSideDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        if (exitPoint == 0) if (!passengerSideDoor.boolValue) passengerSideDoor.TriggerAnimation(playerController);
         if (exitPoint != -1)
         {
-            GameNetworkManager.Instance.localPlayerController.TeleportPlayer(passengerSideExitPoints[exitPoint].position);
+            playerController.TeleportPlayer(passengerSideExitPoints[exitPoint].position);
             return;
         }
-        GameNetworkManager.Instance.localPlayerController.TeleportPlayer(passengerSideExitPoints[1].position);
+        playerController.TeleportPlayer(passengerSideExitPoints[1].position);
     }
 
 
     // --- BACK LEFT PASSENGER OCCUPANT METHODS ---
     public void SetBackLeftPassengerInVehicle()
     {
-        SetBackLeftPassengerInVehicleServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
+        SetBackLeftPassengerInVehicleServerRpc(GameNetworkManager.Instance.localPlayerController);
     }
 
     [Rpc(SendTo.Server, RequireOwnership = false)]
-    protected void SetBackLeftPassengerInVehicleServerRpc(int playerId, RpcParams rpcParams = default)
+    public void SetBackLeftPassengerInVehicleServerRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null ||
-            playerController.isPlayerDead ||
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("SetBackLeftPassengerInVehicleServerRpc failed to find player reference from network behaviour!");
+            return;
+        }
+        if (playerController.isPlayerDead ||
             !playerController.isPlayerControlled ||
             currentBackLeftPassenger != null)
         {
-            CancelSetPlayerInVehicleRpc(playerId);
+            CancelSetPlayerInVehicleRpc(playerNetObjRef);
             return;
         }
         currentBackLeftPassenger = playerController;
@@ -1240,27 +1471,29 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    protected void SetBackLeftPassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
+    public void SetBackLeftPassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("SetBackLeftPassengerInVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("SetBackLeftPassengerInVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        if (playerObj == GameNetworkManager.Instance.localPlayerController)
+        PlayerControllerB localPlayerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        if (playerController == localPlayerController)
         {
             backLeftSeat.SetLocalPlayerIntoSeat();
             localPlayerInBackLeftPassengerSeat = true;
             SetTriggerHoverTip(backLeftDoorTrigger, DOOR_EXIT_HOVERTIP);
-            if (backLeftDoor.boolValue) backLeftDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+            if (backLeftDoor.boolValue) backLeftDoor.TriggerAnimation(localPlayerController);
         }
         else
         {
-            backLeftSeat.SetPlayerAnimations(playerObj, false);
+            backLeftPassengerSeatTrigger.interactable = false;
+            backLeftSeat.SetPlayerAnimations(playerController, false);
         }
-        currentBackLeftPassenger = playerObj;
-        playerObj.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        currentBackLeftPassenger = playerController;
     }
 
     public void OnBackLeftPassengerExitVehicle()
@@ -1271,29 +1504,35 @@ public class HaulerController : VehicleController
         {
             return;
         }
-        if (currentBackLeftPassenger != GameNetworkManager.Instance.localPlayerController)
+        if (!VehicleUtils.IsPlayerLocal(currentBackLeftPassenger))
         {
             return;
         }
         localPlayerInBackLeftPassengerSeat = false;
         SetTriggerHoverTip(backLeftDoorTrigger, DOOR_ENTER_HOVERTIP);
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         currentBackLeftPassenger = null;
-        OnBackLeftPassengerExitVehicleRpc(GameNetworkManager.Instance.localPlayerController, GameNetworkManager.Instance.localPlayerController.transform.position);
+        OnBackLeftPassengerExitVehicleRpc(
+            playerController,
+            playerController.transform.position);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void OnBackLeftPassengerExitVehicleRpc(NetworkBehaviourReference playerNetObjRef, Vector3 exitPoint)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("OnBackLeftPassengerExitVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("OnBackLeftPassengerExitVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        backLeftSeat.ReturnPlayerAnimations(playerObj, false);
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        playerObj.TeleportPlayer(exitPoint, false, 0f, false, true);
+        backLeftSeat.ReturnPlayerAnimations(playerController, false);
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        playerController.TeleportPlayer(exitPoint, false, 0f, false, true);
         currentBackLeftPassenger = null;
+        backLeftPassengerSeatTrigger.interactable = true;
     }
 
     public void ExitBackLeftPassengerSideSeat()
@@ -1301,34 +1540,37 @@ public class HaulerController : VehicleController
         if (!localPlayerInBackLeftPassengerSeat)
             return;
 
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         int exitPoint = CanExitVehicle(exitPoints: backLeftExitPoints);
-        if (exitPoint == 0) if (!backLeftDoor.boolValue) backLeftDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        if (exitPoint == 0) if (!backLeftDoor.boolValue) backLeftDoor.TriggerAnimation(playerController);
         if (exitPoint != -1)
         {
-            GameNetworkManager.Instance.localPlayerController.TeleportPlayer(backLeftExitPoints[exitPoint].position);
+            playerController.TeleportPlayer(backLeftExitPoints[exitPoint].position);
             return;
         }
-        GameNetworkManager.Instance.localPlayerController.TeleportPlayer(backLeftExitPoints[1].position);
+        playerController.TeleportPlayer(backLeftExitPoints[1].position);
     }
 
 
     // --- MIDDLE PASSENGER OCCUPANT METHODS ---
     public void SetBackMiddlePassengerInVehicle()
     {
-        SetBackMiddlePassengerInVehicleServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
+        SetBackMiddlePassengerInVehicleServerRpc(GameNetworkManager.Instance.localPlayerController);
     }
 
     [Rpc(SendTo.Server, RequireOwnership = false)]
-    protected void SetBackMiddlePassengerInVehicleServerRpc(int playerId, RpcParams rpcParams = default)
+    public void SetBackMiddlePassengerInVehicleServerRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null ||
-            playerController.isPlayerDead ||
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("SetBackMiddlePassengerInVehicleServerRpc failed to find player reference from network behaviour!");
+            return;
+        }
+        if (playerController.isPlayerDead ||
             !playerController.isPlayerControlled ||
             currentBackMiddlePassenger != null)
         {
-            CancelSetPlayerInVehicleRpc(playerId);
+            CancelSetPlayerInVehicleRpc(playerNetObjRef);
             return;
         }
         currentBackMiddlePassenger = playerController;
@@ -1336,29 +1578,31 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    protected void SetBackMiddlePassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
+    public void SetBackMiddlePassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("SetBackMiddlePassengerInVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("SetBackMiddlePassengerInVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        if (playerObj == GameNetworkManager.Instance.localPlayerController)
+        PlayerControllerB localPlayerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        if (playerController == localPlayerController)
         {
             backSeat.SetLocalPlayerIntoSeat();
             localPlayerInMiddlePassengerSeat = true;
             SetTriggerHoverTip(backLeftDoorTrigger, DOOR_EXIT_HOVERTIP);
             SetTriggerHoverTip(backRightDoorTrigger, DOOR_EXIT_HOVERTIP);
-            if (backLeftDoor.boolValue) backLeftDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
-            if (backRightDoor.boolValue) backRightDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+            if (backLeftDoor.boolValue) backLeftDoor.TriggerAnimation(localPlayerController);
+            if (backRightDoor.boolValue) backRightDoor.TriggerAnimation(localPlayerController);
         }
         else
         {
-            backSeat.SetPlayerAnimations(playerObj, false);
+            backPassengerSeatTrigger.interactable = false;
+            backSeat.SetPlayerAnimations(playerController, false);
         }
-        currentBackMiddlePassenger = playerObj;
-        playerObj.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        currentBackMiddlePassenger = playerController;
     }
 
     public void OnBackMiddlePassengerExitVehicle()
@@ -1369,30 +1613,36 @@ public class HaulerController : VehicleController
         {
             return;
         }
-        if (currentBackMiddlePassenger != GameNetworkManager.Instance.localPlayerController)
+        if (!VehicleUtils.IsPlayerLocal(currentBackMiddlePassenger))
         {
             return;
         }
         localPlayerInMiddlePassengerSeat = false;
         SetTriggerHoverTip(backLeftDoorTrigger, DOOR_ENTER_HOVERTIP);
         SetTriggerHoverTip(backRightDoorTrigger, DOOR_ENTER_HOVERTIP);
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         currentBackMiddlePassenger = null;
-        OnBackMiddlePassengerExitVehicleRpc(GameNetworkManager.Instance.localPlayerController, GameNetworkManager.Instance.localPlayerController.transform.position);
+        OnBackMiddlePassengerExitVehicleRpc(
+            playerController,
+            playerController.transform.position);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void OnBackMiddlePassengerExitVehicleRpc(NetworkBehaviourReference playerNetObjRef, Vector3 exitPoint)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("OnBackMiddlePassengerExitVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("OnBackMiddlePassengerExitVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        backSeat.ReturnPlayerAnimations(playerObj, false);
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        playerObj.TeleportPlayer(exitPoint, false, 0f, false, true);
+        backSeat.ReturnPlayerAnimations(playerController, false);
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        playerController.TeleportPlayer(exitPoint, false, 0f, false, true);
         currentBackMiddlePassenger = null;
+        backPassengerSeatTrigger.interactable = true;
     }
 
     public void ExitMiddlePassengerSideSeat(bool offSide)
@@ -1400,36 +1650,39 @@ public class HaulerController : VehicleController
         if (!localPlayerInMiddlePassengerSeat)
             return;
 
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         Transform[] exitSidePoints = offSide ? backRightExitPoints : backLeftExitPoints;
         int exitPoint = CanExitVehicle(exitPoints: exitSidePoints);
         AnimatedObjectTrigger door = offSide ? backRightDoor : backLeftDoor;
-        if (exitPoint == 0) if (!door.boolValue) door.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        if (exitPoint == 0) if (!door.boolValue) door.TriggerAnimation(playerController);
         if (exitPoint != -1)
         {
-            GameNetworkManager.Instance.localPlayerController.TeleportPlayer(exitSidePoints[exitPoint].position);
+            playerController.TeleportPlayer(exitSidePoints[exitPoint].position);
             return;
         }
-        GameNetworkManager.Instance.localPlayerController.TeleportPlayer(exitSidePoints[1].position);
+        playerController.TeleportPlayer(exitSidePoints[1].position);
     }
 
 
     // --- BACK RIGHT PASSENGER OCCUPANT METHODS ---
     public void SetBackRightPassengerInVehicle()
     {
-        SetBackRightPassengerInVehicleServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
+        SetBackRightPassengerInVehicleServerRpc(GameNetworkManager.Instance.localPlayerController);
     }
 
     [Rpc(SendTo.Server, RequireOwnership = false)]
-    protected void SetBackRightPassengerInVehicleServerRpc(int playerId, RpcParams rpcParams = default)
+    public void SetBackRightPassengerInVehicleServerRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null ||
-            playerController.isPlayerDead ||
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
+        {
+            Plugin.LogError("SetBackRightPassengerInVehicleServerRpc failed to find player reference from network behaviour!");
+            return;
+        }
+        if (playerController.isPlayerDead ||
             !playerController.isPlayerControlled ||
             currentBackRightPassenger != null)
         {
-            CancelSetPlayerInVehicleRpc(playerId);
+            CancelSetPlayerInVehicleRpc(playerNetObjRef);
             return;
         }
         currentBackRightPassenger = playerController;
@@ -1437,27 +1690,29 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    protected void SetBackRightPassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
+    public void SetBackRightPassengerInVehicleRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("SetBackRightPassengerInVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("SetBackRightPassengerInVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        if (playerObj == GameNetworkManager.Instance.localPlayerController)
+        PlayerControllerB localPlayerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        if (playerController == localPlayerController)
         {
             backRightSeat.SetLocalPlayerIntoSeat();
             localPlayerInBackRightPassengerSeat = true;
             SetTriggerHoverTip(backRightDoorTrigger, DOOR_EXIT_HOVERTIP);
-            if (backRightDoor.boolValue) backRightDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+            if (backRightDoor.boolValue) backRightDoor.TriggerAnimation(localPlayerController);
         }
         else
         {
-            backRightSeat.SetPlayerAnimations(playerObj, false);
+            backRightPassengerSeatTrigger.interactable = false;
+            backRightSeat.SetPlayerAnimations(playerController, false);
         }
-        currentBackRightPassenger = playerObj;
-        playerObj.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        currentBackRightPassenger = playerController;
     }
 
     public void OnBackRightPassengerExitVehicle()
@@ -1468,29 +1723,35 @@ public class HaulerController : VehicleController
         {
             return;
         }
-        if (currentBackRightPassenger != GameNetworkManager.Instance.localPlayerController)
+        if (!VehicleUtils.IsPlayerLocal(currentBackRightPassenger))
         {
             return;
         }
         localPlayerInBackRightPassengerSeat = false;
         SetTriggerHoverTip(backRightDoorTrigger, DOOR_ENTER_HOVERTIP);
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         currentBackRightPassenger = null;
-        OnBackRightPassengerExitVehicleRpc(GameNetworkManager.Instance.localPlayerController, GameNetworkManager.Instance.localPlayerController.transform.position);
+        OnBackRightPassengerExitVehicleRpc(
+            playerController,
+            playerController.transform.position);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void OnBackRightPassengerExitVehicleRpc(NetworkBehaviourReference playerNetObjRef, Vector3 exitPoint)
     {
-        if (!playerNetObjRef.TryGet(out PlayerControllerB playerObj))
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
-            Plugin.LogError("OnBackRightPassengerExitVehicleRpc failed to find player object reference from network behaviour!");
+            Plugin.LogError("OnBackRightPassengerExitVehicleRpc failed to find player reference from network behaviour!");
             return;
         }
-        backRightSeat.ReturnPlayerAnimations(playerObj, false);
-        playerObj.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
-        playerObj.TeleportPlayer(exitPoint, false, 0f, false, true);
+        backRightSeat.ReturnPlayerAnimations(playerController, false);
+        playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
+        playerController.TeleportPlayer(exitPoint, false, 0f, false, true);
         currentBackRightPassenger = null;
+        backRightPassengerSeatTrigger.interactable = true;
     }
 
     public void ExitBackRightPassengerSideSeat()
@@ -1498,79 +1759,100 @@ public class HaulerController : VehicleController
         if (!localPlayerInBackRightPassengerSeat)
             return;
 
-        GameNetworkManager.Instance.localPlayerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         int exitPoint = CanExitVehicle(exitPoints: backRightExitPoints);
-        if (exitPoint == 0) if (!backRightDoor.boolValue) backRightDoor.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        if (exitPoint == 0) if (!backRightDoor.boolValue) backRightDoor.TriggerAnimation(playerController);
         if (exitPoint != -1)
         {
-            GameNetworkManager.Instance.localPlayerController.TeleportPlayer(backRightExitPoints[exitPoint].position);
+            playerController.TeleportPlayer(backRightExitPoints[exitPoint].position);
             return;
         }
-        GameNetworkManager.Instance.localPlayerController.TeleportPlayer(backRightExitPoints[1].position);
+        playerController.TeleportPlayer(backRightExitPoints[1].position);
     }
 
 
     // --- LEAVE OCCUPANT MID-GAME METHODS ---
     [Rpc(SendTo.Server, RequireOwnership = false)]
-    public void OnDriverLeaveGameServerRpc(int playerId)
+    public void OnDriverLeaveGameServerRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
+            Plugin.LogError("OnDriverLeaveGameServerRpc failed to find player reference from network behaviour!");
             return;
         }
         NetworkObject.ChangeOwnership(NetworkManager.ServerClientId);
-        OnDriverLeave(playerController, ignitionStarted, keyIsInIgnition, ignitionOn);
-        OnDriverLeaveGameRpc(playerId, syncedPosition, syncedRotation, ignitionStarted, keyIsInIgnition, ignitionOn);
+        OnDriverLeave(
+            playerController, 
+            ignitionStarted, 
+            keyIsInIgnition, 
+            ignitionOn);
+        OnDriverLeaveGameRpc(
+            playerNetObjRef, 
+            syncedPosition, 
+            syncedRotation, 
+            ignitionStarted, 
+            keyIsInIgnition, 
+            ignitionOn);
     }
 
-    public void OnDriverLeave(PlayerControllerB playerController, bool setIgnitionState, bool setKeyInSlot, bool isIgnitionOn)
+    public void OnDriverLeave(PlayerControllerB playerController, bool setStarted, bool setKeyInSlot, bool isIgnitionOn)
     {
+        frontLeftSeat.ReturnPlayerAnimations(playerController, false);
+        currentDriver = null;
         drivePedalPressed = false;
         brakePedalPressed = false;
-        currentDriver = null;
-
-        ignitionOn = isIgnitionOn;
-        SetDashboardGaugesOn(on: ignitionOn);
-        keyIsInIgnition = setKeyInSlot;
-        ignitionStarted = setIgnitionState;
-
-        if (ignitionStarted && !carExhaustParticle.isEmitting) carExhaustParticle.Play();
-        else if (!ignitionStarted && carExhaustParticle.isEmitting) carExhaustParticle.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-
-        disableAnimations = !ignitionStarted;
+        disableAnimations = !setStarted;
         inIgnitionAnimation = false;
-
         startIgnitionTrigger.isBeingHeldByPlayer = false;
         stopIgnitionTrigger.isBeingHeldByPlayer = false;
-
-        frontLeftSeat.ReturnPlayerAnimations(playerController, false);
+        CancelIgnitionAnimation(setStarted, true);
+        chanceToStartIgnition = 10f;
         playerController.playerBodyAnimator.SetInteger(CAR_ANIM, 0);
+        playerController.playerBodyAnimator.SetFloat(ANIMATION_SPEED, 0.5f);
         playerController.TeleportPlayer(StartOfRound.Instance.notSpawnedPosition.position, false, 0f, false, true);
-
-        CancelIgnitionAnimation(ignitionOn: ignitionStarted, setIgnitionAnim: true);
-        SetIgnition(setStarted: ignitionStarted, setCabinLight: ignitionOn);
+        steeringAnimValue = 0f;
+        playerSteeringWheelAnimFloat = 0.5f;
+        syncedPlayerSteeringAnim = 0.5f;
+        keyIsInIgnition = setKeyInSlot;
+        if (isIgnitionOn && !ignitionOn)
+        {
+            ignitionOn = true;
+            if (dashboardSweepCoroutine == null && !hasSweepedDashboard)
+            {
+                dashboardSweepCoroutine = StartCoroutine(DashboardSweepCoroutine());
+            }
+        }
+        else if (!isIgnitionOn && ignitionOn)
+        {
+            ignitionOn = false;
+            if (dashboardSweepCoroutine != null || hasSweepedDashboard)
+            {
+                CancelDashboardSweep();
+            }
+        }
+        SetIgnition(setStarted, isIgnitionOn);
+        SetDashboardGaugesOn(on: isIgnitionOn);
     }
 
     [Rpc(SendTo.NotServer, RequireOwnership = false)]
-    public void OnDriverLeaveGameRpc(int playerId, Vector3 carLocation, Quaternion carRotation, bool setIgnitionState, bool setKeyInSlot, bool isIgnitionOn)
+    public void OnDriverLeaveGameRpc(NetworkBehaviourReference playerNetObjRef, Vector3 carLocation, Quaternion carRotation, bool setStarted, bool setKeyInSlot, bool isIgnitionOn)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
+            Plugin.LogError("OnDriverLeaveGameRpc failed to find player reference from network behaviour!");
             return;
         }
         syncedPosition = carLocation;
         syncedRotation = carRotation;
-        OnDriverLeave(playerController, setIgnitionState, setKeyInSlot, isIgnitionOn);
+        OnDriverLeave(playerController, setStarted, setKeyInSlot, isIgnitionOn);
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void OnPassengerLeaveGameRpc(int playerId)
+    public void OnPassengerLeaveGameRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
+            Plugin.LogError("OnPassengerLeaveGameRpc failed to find player reference from network behaviour!");
             return;
         }
         frontRightSeat.ReturnPlayerAnimations(playerController, false);
@@ -1580,11 +1862,11 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void OnBackLeftPassengerLeaveGameRpc(int playerId)
+    public void OnBackLeftPassengerLeaveGameRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
+            Plugin.LogError("OnBackLeftPassengerLeaveGameRpc failed to find player reference from network behaviour!");
             return;
         }
         backLeftSeat.ReturnPlayerAnimations(playerController, false);
@@ -1594,11 +1876,11 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void OnBackMiddlePassengerLeaveGameRpc(int playerId)
+    public void OnBackMiddlePassengerLeaveGameRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
+            Plugin.LogError("OnBackMiddlePassengerLeaveGameRpc failed to find player reference from network behaviour!");
             return;
         }
         backSeat.ReturnPlayerAnimations(playerController, false);
@@ -1608,11 +1890,11 @@ public class HaulerController : VehicleController
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void OnBackRightPassengerLeaveGameRpc(int playerId)
+    public void OnBackRightPassengerLeaveGameRpc(NetworkBehaviourReference playerNetObjRef)
     {
-        PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[playerId];
-        if (playerController == null)
+        if (!playerNetObjRef.TryGet(out PlayerControllerB playerController))
         {
+            Plugin.LogError("OnBackRightPassengerLeaveGameRpc failed to find player reference from network behaviour!");
             return;
         }
         backRightSeat.ReturnPlayerAnimations(playerController, false);
@@ -1625,11 +1907,11 @@ public class HaulerController : VehicleController
     // --- OCCUPANT EXITING METHODS ---
     private int CanExitVehicle(Transform[] exitPoints)
     {
-        for (int j = 0; j < exitPoints.Length; j++)
+        for (int i = 0; i < exitPoints.Length; i++)
         {
-            if (!CheckExitPointInvalid(GameNetworkManager.Instance.localPlayerController.gameplayCamera.transform.position, exitPoints[j].position, exitCarLayerMask, QueryTriggerInteraction.Ignore))
+            if (!CheckExitPointInvalid(GameNetworkManager.Instance.localPlayerController.gameplayCamera.transform.position, exitPoints[i].position, exitCarLayerMask, QueryTriggerInteraction.Ignore))
             {
-                return j;
+                return i;
             }
         }
         return -1;
@@ -1706,6 +1988,7 @@ public class HaulerController : VehicleController
     /// </summary>
     public void ActivateMagnet(InputAction.CallbackContext context)
     {
+        // i fucking hate this feature, i hate how it has become an expectation, it is objectively not quality of life, it obsoletes the magnet lever completely, that's boring.
         if (!context.performed)
             return;
 
@@ -1716,7 +1999,7 @@ public class HaulerController : VehicleController
             return;
         }
 
-        ScandalsTweaks.Utils.References.magnetTrigger!.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
+        ScandalLib.Utils.References.magnetTrigger!.TriggerAnimation(GameNetworkManager.Instance.localPlayerController);
         /*
         string newState = ScandalsTweaks.Utils.References.magnetTrigger.boolValue ? "Activated" : "Deactivated";
         HUDManager.Instance.DisplayGlobalNotification($"Ship Magnet {newState}");
@@ -1743,36 +2026,41 @@ public class HaulerController : VehicleController
         steeringAnimValue = moveInputVector.x;
 
         if (steeringAnimValue == 0)
-            steeringWheelAnimValue = NormaliseFloat(Mathf.Lerp(steeringWheelAnimValue, 0, steeringReturnSpeed * Time.deltaTime));
+            steeringWheelAnimValue = Mathf.Lerp(steeringWheelAnimValue, 0, steeringReturnSpeed * Time.deltaTime);
         else
-            steeringWheelAnimValue = NormaliseFloat(Mathf.Lerp(steeringWheelAnimValue, steeringAnimValue, steeringSpeed * Time.deltaTime));
+            steeringWheelAnimValue = Mathf.Lerp(steeringWheelAnimValue, steeringAnimValue, steeringSpeed * Time.deltaTime);
+        TryRecenterSteeringWheel();
 
         float gasInputValue = Plugin.VehicleControlsInstance.GasPedalKey.ReadValue<float>();
         float brakeInputValue = Plugin.VehicleControlsInstance.BrakePedalKey.ReadValue<float>();
 
         drivePedalPressed = gasInputValue > 0.1f && shiftGearCoroutine == null;
         brakePedalPressed = brakeInputValue > 0.1f;
+    }
 
-        if (UserConfig.RecenterWheel.Value && moveInputVector.x == 0f)
-            steeringWheelAnimFloat = NormaliseFloat(Mathf.MoveTowards(steeringWheelAnimFloat, 0f, steeringWheelTurnSpeed * Time.deltaTime / 6f));
+    private void TryRecenterSteeringWheel()
+    {
+        if (!UserConfig.RecenterWheel.Value)
+            return;
+        if (Mathf.Abs(moveInputVector.x) > 0.1f)
+            return;
+        steeringWheelAnimFloat = Mathf.MoveTowards(steeringWheelAnimFloat, 0f, steeringWheelTurnSpeed * Time.deltaTime / 6f);
     }
 
     private void SyncVehicleInput()
     {
-        if (syncedMoveInputVector != moveInputVector ||
-            (syncedDrivePedalPressed != drivePedalPressed || syncedBrakePedalPressed != brakePedalPressed))
+        if (syncedDrivePedalPressed != drivePedalPressed || 
+            syncedBrakePedalPressed != brakePedalPressed)
         {
-            syncedMoveInputVector = moveInputVector;
             syncedDrivePedalPressed = drivePedalPressed;
             syncedBrakePedalPressed = brakePedalPressed;
-            SyncPlayerInputsRpc(moveInputVector, drivePedalPressed, brakePedalPressed);
+            SyncPlayerInputsRpc(drivePedalPressed, brakePedalPressed);
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void SyncPlayerInputsRpc(Vector2 playerInput, bool gasPressed, bool brakePressed)
+    [Rpc(SendTo.NotOwner)]
+    public void SyncPlayerInputsRpc(bool gasPressed, bool brakePressed)
     {
-        syncedMoveInputVector = playerInput;
         syncedDrivePedalPressed = gasPressed;
         syncedBrakePedalPressed = brakePressed;
     }
@@ -1805,6 +2093,7 @@ public class HaulerController : VehicleController
         gear = CarGearShift.Park;
         MaxEngineRPM = 4500f;
         MinEngineRPM = 900f;
+        brakeSpeed = 2300f;
         engineIntensityPercentage = 180f;
         EngineTorque = 2800f;
         engineReversePower = -6000f;
@@ -1850,13 +2139,6 @@ public class HaulerController : VehicleController
         speed = 55;
         stability = 0.55f;
 
-        carTooltips = new string[3]
-        {
-            "Gas pedal : [W]",
-            "Brake pedal : [S]",
-            "Boost : [Space]",
-        };
-
         // maximum weight each wheel can hold up
         // set here so each side has consistent sprung-mass
         FrontLeftWheel.sprungMass = 220f;
@@ -1877,7 +2159,7 @@ public class HaulerController : VehicleController
         turboBoostForce = 12000f;
         turboBoostUpwardForce = 28800f;
 
-        jumpForce = 4900f;
+        jumpForce = 3300f;
         pushForceMultiplier = 80f;
         pushVerticalOffsetAmount = 1.1f;
         steeringWheelTurnSpeed = 4.65f;
@@ -1923,17 +2205,20 @@ public class HaulerController : VehicleController
         gearStickAudio.volume = 0.7f;
     }
 
-
     // Tyre friction
+
+    public float asymSlip = 0.87f;
+    public float asymVlaue = 0.94f;
+
     public new void SetWheelFriction()
     {
         WheelFrictionCurve forwardFrictionCurve = new WheelFrictionCurve
         {
-            extremumSlip = 0.6f,
-            extremumValue = 0.9f,
-            asymptoteSlip = 0.78f,
-            asymptoteValue = 0.66f,
-            stiffness = 1.05f,
+            extremumSlip = 5f,
+            extremumValue = 3f,
+            asymptoteSlip = asymSlip,
+            asymptoteValue = asymVlaue,
+            stiffness = 1.1f,
         };
         FrontRightWheel.forwardFriction = forwardFrictionCurve;
         FrontLeftWheel.forwardFriction = forwardFrictionCurve;
@@ -1969,84 +2254,105 @@ public class HaulerController : VehicleController
             playerSteeringWheelAnimFloat = currentDriver.playerBodyAnimator.GetFloat(ANIMATION_SPEED) + playerSteer * -2f;
 
         // misc
-        SetCarTyreSlipEffects();
+        SetCarTyreEffects();
         SetCarDashboard();
         SetCarLighting();
-        SetCarAutomaticShifter();
+        SetCarGearstick();
         SetCarAudioEffects();
-        SetCarKeyEffects();
+        bool attachedToShipAndInShipPhase = magnetedToShip && (IsInShipPhaseAndNotLoadingLevel() || !StartOfRound.Instance.shipDoorsEnabled);
+        if (setAudiosMuted != attachedToShipAndInShipPhase)
+        {
+            SetVehicleAudioMuted(attachedToShipAndInShipPhase);
+            setAudiosMuted = attachedToShipAndInShipPhase;
+        }
+        /*
+        if (attachedToShipAndInShipPhase && windshieldBroken)
+        {
+            RegenerateWindshield();
+        }
+        */
+        SetCarIgnitionKey();
 
         if (IsOwner)
         {
-            SyncCarEffects();
+            SyncCarEffectsToOtherClients();
+            if (syncedExtremeStress != underExtremeStress)
+            {
+                syncedExtremeStress = underExtremeStress;
+                SyncExtremeStressRpc(underExtremeStress);
+            }
             return;
         }
-        steeringWheelAnimFloat = Mathf.Lerp(steeringWheelAnimFloat, syncedSteeringWheelRotation, 6f * Time.deltaTime);
-        playerSteeringWheelAnimFloat = Mathf.MoveTowards(playerSteeringWheelAnimFloat, syncedPlayerSteeringAnim, steeringWheelTurnSpeed * Time.deltaTime / 6f);
+        steeringWheelAnimFloat = Mathf.Lerp(steeringWheelAnimFloat, syncedSteeringRotation, steeringSpeed * Time.deltaTime);
+        playerSteeringWheelAnimFloat = Mathf.Lerp(playerSteeringWheelAnimFloat, syncedPlayerSteeringAnim, steeringSpeed * Time.deltaTime);
     }
 
 
     // --- MISC EFFECTS ---
     // tyre skid effects
-    public void SetCarTyreSlipEffects()
+    public void SetCarTyreEffects()
     {
         if (IsOwner)
         {
-            float vehicleSpeed = Vector3.Dot(Vector3.Normalize(mainRigidbody.velocity * 1000f), transform.forward);
-            float wheelSpeed = Mathf.Abs(backWheelRPM);
-            bool audioActive = false;
+            float skiddingHighest = Vector3.Dot(Vector3.Normalize(mainRigidbody.velocity * 1000f), transform.forward);
+            bool skiddingAudioActive = skiddingHighest > -0.6f && skiddingHighest < 0.4f && (averageVelocity.magnitude > 4f || backWheelRPM > 400f);
             if (backWheelsGrounded)
             {
                 bool tyreSlip = forwardSlipping || sidewaySlipping;
-                if (tyreSlip && wheelSpeed >= 350f)
+                if (tyreSlip)
                 {
-                    vehicleSpeed = Mathf.Max(vehicleSpeed, 0.8f);
-                    audioActive = true;
+                    skiddingAudioActive = true;
+                    skiddingHighest = Mathf.Max(skiddingHighest, 0.8f);
                     if (averageVelocity.magnitude > 8f && !tireSparks.isPlaying)
+                    {
                         tireSparks.Play(true);
+                    }
                 }
                 else
                 {
-                    audioActive = false;
                     if (tireSparks.isEmitting)
+                    {
                         tireSparks.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                    }
                 }
             }
             else
             {
-                audioActive = false;
+                skiddingAudioActive = false;
                 if (tireSparks.isEmitting)
+                {
                     tireSparks.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                }
             }
-
-            SetVehicleAudioProperties(skiddingAudio, audioActive, 0f, vehicleSpeed, 3f, true, 1f);
-            if (Mathf.Abs(syncedTyreStress - vehicleSpeed) > 0.02f || syncedTyreSlipping != audioActive)
+            bool sparksEmitting = tireSparks.isEmitting;
+            if (Mathf.Abs(tyreStress - skiddingHighest) > 0.02f ||
+                wheelSlipping != skiddingAudioActive ||
+                wheelSkidActive != sparksEmitting)
             {
-                syncedTyreStress = vehicleSpeed;
-                syncedTyreSlipping = audioActive;
-                SetCarTyreStressRpc(vehicleSpeed, audioActive);
+                tyreStress = skiddingHighest;
+                wheelSlipping = skiddingAudioActive;
+                wheelSkidActive = sparksEmitting;
+                SetTyreStressRpc(skiddingHighest, skiddingAudioActive, sparksEmitting);
             }
+            SetVehicleAudioProperties(skiddingAudio, skiddingAudioActive, 0f, skiddingHighest, 3f, true, 1f);
             return;
         }
-        if (syncedTyreSlipping && averageVelocity.magnitude > 8f && !tireSparks.isPlaying)
-        {
+        if (wheelSkidActive && !tireSparks.isPlaying)
             tireSparks.Play(true);
-        }
-        else if (!syncedTyreSlipping && tireSparks.isEmitting)
-        {
+        else if (!wheelSkidActive && tireSparks.isEmitting)
             tireSparks.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-        }
-        SetVehicleAudioProperties(skiddingAudio, syncedTyreSlipping, 0f, syncedTyreStress, 3f, true, 1f);
+        SetVehicleAudioProperties(skiddingAudio, wheelSlipping, 0f, tyreStress, 3f, true, 1f);
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void SetCarTyreStressRpc(float stress, bool wheelSkidding)
+    [Rpc(SendTo.NotOwner)]
+    public void SetTyreStressRpc(float wheelStress, bool wheelSkidding, bool sparksEmitting)
     {
-        syncedTyreStress = stress;
-        syncedTyreSlipping = wheelSkidding;
+        tyreStress = wheelStress;
+        wheelSlipping = wheelSkidding;
+        wheelSkidActive = sparksEmitting;
     }
 
-    public void SetCarKeyEffects(bool localUseBodyHands = false)
+    public void SetCarIgnitionKey(bool localUseBodyHands = false)
     {
         if (currentDriver == null || keyIsInIgnition)
         {
@@ -2204,7 +2510,7 @@ public class HaulerController : VehicleController
         }
         else
         {
-            bool tryingIgnition = engineAudio1.volume > 0.1f && twistingKey;
+            bool tryingIgnition = engineAudio1.volume > 0.1f && keyIgnitionCoroutine != null;
             speedometerFloat = Mathf.Lerp(speedometerFloat, 0f, 6f * Time.deltaTime);
             tachometerFloat = Mathf.Lerp(tachometerFloat, tryingIgnition ? 0.075f : 0f, 4.5f * Time.deltaTime);
         }
@@ -2307,23 +2613,24 @@ public class HaulerController : VehicleController
         }
     }
 
-    private void SetCarAutomaticShifter()
+    private void SetCarGearstick()
     {
+        float timeSinceStartup = Time.realtimeSinceStartup;
         switch (gear)
         {
             case CarGearShift.Park:
                 {
-                    gearStickAnimValue = Mathf.MoveTowards(gearStickAnimValue, 0f, shiftSpeed * Time.deltaTime * (Time.realtimeSinceStartup - timeAtLastGearShift));
+                    gearStickAnimValue = Mathf.MoveTowards(gearStickAnimValue, 0f, shiftSpeed * Time.deltaTime * (timeSinceStartup - timeAtLastGearShift));
                     break;
                 }
             case CarGearShift.Reverse:
                 {
-                    gearStickAnimValue = Mathf.MoveTowards(gearStickAnimValue, 0.5f, shiftSpeed * Time.deltaTime * (Time.realtimeSinceStartup - timeAtLastGearShift));
+                    gearStickAnimValue = Mathf.MoveTowards(gearStickAnimValue, 0.5f, shiftSpeed * Time.deltaTime * (timeSinceStartup - timeAtLastGearShift));
                     break;
                 }
             case CarGearShift.Drive:
                 {
-                    gearStickAnimValue = Mathf.MoveTowards(gearStickAnimValue, 1f, shiftSpeed * Time.deltaTime * (Time.realtimeSinceStartup - timeAtLastGearShift));
+                    gearStickAnimValue = Mathf.MoveTowards(gearStickAnimValue, 1f, shiftSpeed * Time.deltaTime * (timeSinceStartup - timeAtLastGearShift));
                     break;
                 }
         }
@@ -2332,14 +2639,14 @@ public class HaulerController : VehicleController
 
 
     // --- MISC SYNC METHODS ---
-    public void SyncCarEffects()
+    public void SyncCarEffectsToOtherClients()
     {
         if (syncEffectsInterval > 0.045f)
         {
-            if (syncedSteeringWheelRotation != steeringWheelAnimFloat)
+            if (syncedSteeringRotation != steeringWheelAnimFloat)
             {
                 syncEffectsInterval = 0f;
-                syncedSteeringWheelRotation = steeringWheelAnimFloat;
+                syncedSteeringRotation = steeringWheelAnimFloat;
                 syncedPlayerSteeringAnim = playerSteeringWheelAnimFloat;
                 SyncCarEffectsRpc(steeringWheelAnimFloat, playerSteeringWheelAnimFloat);
                 return;
@@ -2351,10 +2658,10 @@ public class HaulerController : VehicleController
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void SyncCarEffectsRpc(float wheelRotation, float playerSteering)
     {
-        syncedSteeringWheelRotation = wheelRotation;
+        syncedSteeringRotation = wheelRotation;
         syncedPlayerSteeringAnim = playerSteering;
     }
 
@@ -2366,7 +2673,7 @@ public class HaulerController : VehicleController
     /// </summary>
     private new void SetVehicleAudioProperties(AudioSource audio, bool audioActive, float lowest, float highest, float lerpSpeed, bool useVolumeInsteadOfPitch = false, float onVolume = 1f)
     {
-        if (audioActive && ((audio == rollingAudio || audio == skiddingAudio) && (magnetedToShip || allWheelsAirborne)))
+        if (audioActive && ((audio == rollingAudio || audio == skiddingAudio) && allWheelsAirborne))
             audioActive = false;
 
         if (!audioActive)
@@ -2402,6 +2709,7 @@ public class HaulerController : VehicleController
 
     public void SetCarAudioEffects()
     {
+        float timeSinceStartup = Time.realtimeSinceStartup;
         //float highestAudio1 = Mathf.Clamp((EngineRPM / engineIntensityPercentage), 0.65f, 1.15f);
         //float highestAudio2 = Mathf.Clamp((EngineRPM / engineIntensityPercentage), 0.7f, 1.5f);
         float engineAudioAnimCurve = engineCurve.Evaluate(EngineRPM / MaxEngineRPM);
@@ -2421,9 +2729,9 @@ public class HaulerController : VehicleController
         SetVehicleAudioProperties(rollingAudio, carRollingAudioActive, 0f, highestTyre, 5f, useVolumeInsteadOfPitch: true);
         SetVehicleAudioProperties(extremeStressAudio, underExtremeStress, 0.2f, 1f, 3f, useVolumeInsteadOfPitch: true);
         SetRadioValues();
-        if (engineAudio1.volume > 0.3f && engineAudio1.isPlaying && (Time.realtimeSinceStartup - timeAtLastEngineAudioPing > 2f))
+        if (engineAudio1.volume > 0.3f && engineAudio1.isPlaying && (timeSinceStartup - timeAtLastEngineAudioPing > 2f))
         {
-            timeAtLastEngineAudioPing = Time.realtimeSinceStartup;
+            timeAtLastEngineAudioPing = timeSinceStartup;
             if (EngineRPM > 2800f)
             {
                 RoundManager.Instance.PlayAudibleNoise(engineAudio1.transform.position, 32f, 0.75f, 0, false, 2692);
@@ -2458,20 +2766,17 @@ public class HaulerController : VehicleController
         if (honkingHorn)
         {
             hornAudio.pitch = 1f;
-
             if (!hornAudio.isPlaying)
                 hornAudio.Play();
-
-            if (Time.realtimeSinceStartup - timeAtLastHornPing > 2f)
+            if (timeSinceStartup - timeAtLastHornPing > 2f)
             {
-                timeAtLastHornPing = Time.realtimeSinceStartup;
+                timeAtLastHornPing = timeSinceStartup;
                 RoundManager.Instance.PlayAudibleNoise(hornAudio.transform.position, 28f, 0.85f, 0, noiseIsInsideClosedShip: false, 106217);
             }
         }
         else
         {
             hornAudio.pitch = Mathf.Max(hornAudio.pitch - Time.deltaTime * 6f, 0.01f);
-
             if (hornAudio.pitch < 0.02f && hornAudio.isPlaying)
                 hornAudio.Stop();
         }
@@ -2482,26 +2787,29 @@ public class HaulerController : VehicleController
     [Rpc(SendTo.NotServer, RequireOwnership = false)]
     public void SyncRadioTimeRpc(float songTime, float syncedTime, float staticTime)
     {
+        float timeSinceStartup = Time.realtimeSinceStartup;
         currentSongTime = songTime;
         syncedSongTime = syncedTime;
-        timeLastSyncedRadio = Time.realtimeSinceStartup;
-        SetRadioTime();
-        SetRadioStaticTime(staticTime);
+        timeLastSyncedRadio = timeSinceStartup;
+        SetRadioTime(timeSinceStartup);
+        SetRadioStaticTime(staticTime, timeSinceStartup);
     }
 
-    public void SetRadioTime()
+    public void SetRadioTime(float timeSinceStartup)
     {
-        if (radioAudio.clip == null || !radioOn) return;
-        float setTime = (syncedSongTime + (Time.realtimeSinceStartup - timeLastSyncedRadio)) % radioAudio.clip.length;
+        if (radioAudio.clip == null)
+            return;
+
+        float setTime = (syncedSongTime + (timeSinceStartup - timeLastSyncedRadio)) % radioAudio.clip.length;
         if (Mathf.Abs(setTime - radioAudio.time) > 1f)
         {
             radioAudio.time = setTime;
         }
     }
 
-    public void SetRadioStaticTime(float staticTime)
+    public void SetRadioStaticTime(float staticTime, float timeSinceStartup)
     {
-        float setTime = (staticTime + (Time.realtimeSinceStartup - timeLastSyncedRadio)) % radioInterference.clip.length;
+        float setTime = (staticTime + (timeSinceStartup - timeLastSyncedRadio)) % radioInterference.clip.length;
         if (Mathf.Abs(setTime - radioInterference.time) > 1f)
         {
             radioInterference.time = setTime;
@@ -2596,12 +2904,13 @@ public class HaulerController : VehicleController
     // --- RADIO VALUES ---
     public new void SetRadioValues()
     {
-        if (IsServer && radioTurnedOnBefore)
+        float timeSinceStartup = Time.realtimeSinceStartup;
+        if (NetworkManager.IsServer && radioTurnedOnBefore)
         {
             currentSongTime += Time.deltaTime;
-            if (Time.realtimeSinceStartup - timeLastSyncedRadio > 1f)
+            if (timeSinceStartup - timeLastSyncedRadio > 1f)
             {
-                timeLastSyncedRadio = Time.realtimeSinceStartup;
+                timeLastSyncedRadio = timeSinceStartup;
                 syncedSongTime = radioAudio.time;
                 SyncRadioTimeRpc(currentSongTime, syncedSongTime, radioInterference.time);
             }
@@ -2613,9 +2922,9 @@ public class HaulerController : VehicleController
             return;
         }
         if (!radioTurnedOnBefore) radioTurnedOnBefore = true;
-        if (radioAudio.isPlaying && Time.realtimeSinceStartup > radioPingTimestamp)
+        if (radioAudio.isPlaying && timeSinceStartup > radioPingTimestamp)
         {
-            radioPingTimestamp = (Time.realtimeSinceStartup + 1f);
+            radioPingTimestamp = (timeSinceStartup + 1f);
             RoundManager.Instance.PlayAudibleNoise(radioAudio.transform.position, 16f, Mathf.Min((radioAudio.volume + radioInterference.volume) * 0.5f, 0.9f), 0, false, 106217);
         }
         if (IsOwner)
@@ -2631,15 +2940,15 @@ public class HaulerController : VehicleController
             {
                 radioSignalQuality = Mathf.Clamp(radioSignalQuality + Time.deltaTime, 0f, 3f);
             }
-            if (Time.realtimeSinceStartup - changeRadioSignalTime > 0.3f)
+            if (timeSinceStartup - changeRadioSignalTime > 0.3f)
             {
-                changeRadioSignalTime = Time.realtimeSinceStartup;
+                changeRadioSignalTime = timeSinceStartup;
                 if (radioSignalQuality < 1.2f && UnityEngine.Random.Range(0, 100) < 6)
                 {
                     radioSignalQuality = Mathf.Min(radioSignalQuality + 1.5f, 3f);
                     radioSignalDecreaseThreshold = Mathf.Min(radioSignalDecreaseThreshold + 30f, 100f);
                 }
-                SetRadioSignalQualityRpc((int)Mathf.Round(radioSignalQuality), radioSignalDecreaseThreshold);
+                SetRadioSignalQualityRpc(radioSignalQuality, radioSignalDecreaseThreshold);
             }
         }
         switch ((int)Mathf.Round(radioSignalQuality))
@@ -2663,8 +2972,8 @@ public class HaulerController : VehicleController
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void SetRadioSignalQualityRpc(int signalQuality, float signalDecrease)
+    [Rpc(SendTo.NotOwner)]
+    public void SetRadioSignalQualityRpc(float signalQuality, float signalDecrease)
     {
         radioSignalQuality = signalQuality;
         radioSignalDecreaseThreshold = signalDecrease;
@@ -2760,7 +3069,7 @@ public class HaulerController : VehicleController
                             PlayerControllerB playerControllerB = currentDriver != null ? currentDriver : currentPassenger;
                             if (vel.magnitude > 2f && dealDamage)
                             {
-                                enemyScript.HitEnemyOnLocalClient(2, Vector3.zero, playerControllerB, playHitSFX: true, 331);
+                                enemyScript.HitEnemyOnLocalClient(2, Vector3.zero, playerControllerB, playHitSFX: true, 332);
                             }
                             result = true;
                             if (obstacleSize > 2f) DealPermanentDamage(3, position);
@@ -2774,7 +3083,7 @@ public class HaulerController : VehicleController
                             DealPermanentDamage(5, position);
                         }
                         PlayerControllerB playerWhoHit = currentDriver != null ? currentDriver : currentPassenger;
-                        enemyScript.HitEnemyOnLocalClient(22, Vector3.zero, playerWhoHit, false, -1);
+                        enemyScript.HitEnemyOnLocalClient(22, Vector3.zero, playerWhoHit, playHitSFX: true, 332);
                     }
                     PlayCollisionAudio(position, 5, 1f);
                     return result;
@@ -2795,7 +3104,8 @@ public class HaulerController : VehicleController
         if (collision.collider.gameObject.layer != 8)
             return;
 
-        if (Time.realtimeSinceStartup - timeSinceLastCollision < 0.1f)
+        float timeSinceStartup = Time.realtimeSinceStartup;
+        if (timeSinceStartup - timeSinceLastCollision < 0.1f)
             return;
 
         float collisionImpulse = 0f;
@@ -2819,9 +3129,9 @@ public class HaulerController : VehicleController
             if (contactCount > 3 && averageVelocity.magnitude > 2.5f)
             {
                 SetInternalStress(0.25f);
-                lastStressType = "Scraping";
+                lastStressType = "; Scraping";
             }
-            timeSinceLastCollision = Time.realtimeSinceStartup;
+            timeSinceLastCollision = timeSinceStartup;
             return;
         }
 
@@ -2832,9 +3142,10 @@ public class HaulerController : VehicleController
         {
             if (carHP < 3)
             {
-                DestroyCarRpc();
+                timeAtLastDamage = Time.realtimeSinceStartup;
+                syncedCarHP = carHP;
+                DestroyCarRpc(carHP);
                 DestroyCar();
-                timeSinceLastCollision = Time.realtimeSinceStartup;
                 return;
             }
 
@@ -2846,7 +3157,7 @@ public class HaulerController : VehicleController
             DealPermanentDamage(6);
             CarCollisionRpc(Vector3.ClampMagnitude(-collision.relativeVelocity, 60f));
             BreakWindshield();
-            timeSinceLastCollision = Time.realtimeSinceStartup + 0.25f;
+            timeSinceLastCollision = timeSinceStartup + 0.25f;
             return;
         }
 
@@ -2871,7 +3182,7 @@ public class HaulerController : VehicleController
             collisionVolume = Mathf.Clamp((collisionImpulse - maximumBumpForce) / 20000f, 0.8f, 1f);
             collisionVolume = Mathf.Clamp(collisionVolume + UnityEngine.Random.Range(-0.15f, 0.25f), 0.7f, 1f);
             DealPermanentDamage(1);
-            timeSinceLastCollision = Time.realtimeSinceStartup + 0.2f;
+            timeSinceLastCollision = timeSinceStartup + 0.2f;
         }
 
         if (audioType != -1)
@@ -2888,7 +3199,7 @@ public class HaulerController : VehicleController
             {
                 CarBump(Vector3.ClampMagnitude(-collision.relativeVelocity, 40f));
             }
-            timeSinceLastCollision = Time.realtimeSinceStartup + 0.33f;
+            timeSinceLastCollision = timeSinceStartup + 0.33f;
         }
     }
 
@@ -2915,7 +3226,7 @@ public class HaulerController : VehicleController
             playerController.externalForceAutoFade += vel;
             return;
         }
-        if (!VehicleUtils.IsPlayerInPickupBounds(playerController, this))
+        if (!IsPlayerAttached(playerController))
         {
             return;
         }
@@ -2966,7 +3277,7 @@ public class HaulerController : VehicleController
             playerController.DamagePlayer(20, true, true, CauseOfDeath.Inertia, 0, false, vel);
             return;
         }
-        if (!VehicleUtils.IsPlayerInPickupBounds(playerController, this))
+        if (!IsPlayerAttached(playerController))
         {
             return;
         }
@@ -3003,57 +3314,66 @@ public class HaulerController : VehicleController
 
     public new void PlayCollisionAudio(Vector3 setPosition, int audioType, float setVolume)
     {
-        if (Time.realtimeSinceStartup - audio1Time > Time.realtimeSinceStartup - audio2Time)
+        float timeSinceStartup = Time.realtimeSinceStartup;
+        bool audioTime;
+        if (timeSinceStartup - audio1Time > timeSinceStartup - audio2Time)
         {
-            bool collisionAudioTime = Time.realtimeSinceStartup - audio1Time >= collisionAudio1.clip.length * 0.8f;
-            if (audio1Type <= audioType || collisionAudioTime)
+            audioTime = timeSinceStartup - audio1Time >= collisionAudio1.clip.length * 0.8f;
+            if (audio1Type <= audioType || audioTime)
             {
-                audio1Time = Time.realtimeSinceStartup;
+                audio1Time = timeSinceStartup;
                 audio1Type = audioType;
                 collisionAudio1.transform.position = setPosition;
-                CarCollisionSFXRpc(collisionAudio1.transform.localPosition, 0, audioType, setVolume);
-                PlayRandomClipAndPropertiesFromAudio(collisionAudio1, setVolume, collisionAudioTime, audioType);
+                CarCollisionSFXRpc(collisionAudio1.transform.localPosition, 0, audioType, audioTime, setVolume);
+                PlayRandomClipAndPropertiesFromAudio(collisionAudio1, setVolume, audioTime, audioType);
             }
         }
         else
         {
-            bool audioTime = Time.realtimeSinceStartup - audio2Time >= collisionAudio2.clip.length * 0.8f;
-            if (audio1Type <= audioType || audioTime)
+            audioTime = timeSinceStartup - audio2Time >= collisionAudio2.clip.length * 0.8f;
+            if (audio2Type <= audioType || audioTime)
             {
-                audio2Time = Time.realtimeSinceStartup;
+                audio2Time = timeSinceStartup;
                 audio2Type = audioType;
                 collisionAudio2.transform.position = setPosition;
-                CarCollisionSFXRpc(collisionAudio2.transform.localPosition, 1, audioType, setVolume);
+                CarCollisionSFXRpc(collisionAudio2.transform.localPosition, 1, audioType, audioTime, setVolume);
                 PlayRandomClipAndPropertiesFromAudio(collisionAudio2, setVolume, audioTime, audioType);
             }
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void CarCollisionSFXRpc(Vector3 audioPosition, int audio, int audioType, float vol)
+    [Rpc(SendTo.NotOwner)]
+    public void CarCollisionSFXRpc(Vector3 audioPosition, int audio, int audioType, bool audioTime, float vol)
     {
+        float timeSinceStartup = Time.realtimeSinceStartup;
         AudioSource audioSource;
-        if (audio == 0)
+        //bool audioTime;
+        if (audio != 0)
         {
-            audioSource = collisionAudio1;
+            audio2Time = timeSinceStartup;
+            audio2Type = audioType;
+            audioSource = collisionAudio2;
+            //audioTime = timeSinceStartup - audio2Time >= audioSource.clip.length * 0.8f;
         }
         else
         {
-            audioSource = collisionAudio2;
+            audio1Time = timeSinceStartup;
+            audio1Type = audioType;
+            audioSource = collisionAudio1;
+            //audioTime = timeSinceStartup - audio1Time >= audioSource.clip.length * 0.8f;
         }
-        bool audioFinished = audioSource.clip.length - audioSource.time < 0.2f;
         audioSource.transform.localPosition = audioPosition;
-        PlayRandomClipAndPropertiesFromAudio(audioSource, vol, audioFinished, audioType);
+        PlayRandomClipAndPropertiesFromAudio(audioSource, vol, audioTime, audioType);
     }
 
-    private new void PlayRandomClipAndPropertiesFromAudio(AudioSource source, float volume, bool isAudioFinished, int collisionType)
+    private new void PlayRandomClipAndPropertiesFromAudio(AudioSource audio, float setVolume, bool audioFinished, int audioType)
     {
-        if (!isAudioFinished)
+        if (!audioFinished)
         {
-            source.Stop();
+            audio.Stop();
         }
         AudioClip[] selectedClips;
-        switch (collisionType)
+        switch (audioType)
         {
             case 0:
                 selectedClips = minCollisions;
@@ -3073,29 +3393,29 @@ public class HaulerController : VehicleController
                 break;
         }
         AudioClip chosenClip = selectedClips[UnityEngine.Random.Range(0, selectedClips.Length)];
-        if (chosenClip == source.clip && UnityEngine.Random.Range(0, 10) <= 5)
+        if (chosenClip == audio.clip && UnityEngine.Random.Range(0, 10) <= 5)
         {
             chosenClip = selectedClips[UnityEngine.Random.Range(0, selectedClips.Length)];
         }
-        if (isAudioFinished)
+        if (audioFinished)
         {
-            source.pitch = UnityEngine.Random.Range(0.8f, 1.2f);
+            audio.pitch = UnityEngine.Random.Range(0.8f, 1.2f);
         }
-        source.clip = chosenClip;
-        source.PlayOneShot(chosenClip, volume);
-        if (collisionType >= 2)
+        audio.clip = chosenClip;
+        audio.PlayOneShot(chosenClip, setVolume);
+        if (audioType >= 2)
         {
-            RoundManager.Instance.PlayAudibleNoise(engineAudio1.transform.position, 18f + volume * 7f, 0.6f, 0, noiseIsInsideClosedShip: false, 106217);
+            RoundManager.Instance.PlayAudibleNoise(engineAudio1.transform.position, 18f + setVolume * 7f, 0.6f, 0, noiseIsInsideClosedShip: false, 106217);
         }
-        else if (collisionType >= 1)
+        else if (audioType >= 1)
         {
-            RoundManager.Instance.PlayAudibleNoise(engineAudio1.transform.position, 12f + volume * 7f, 0.6f, 0, noiseIsInsideClosedShip: false, 106217);
+            RoundManager.Instance.PlayAudibleNoise(engineAudio1.transform.position, 12f + setVolume * 7f, 0.6f, 0, noiseIsInsideClosedShip: false, 106217);
         }
-        if (collisionType == -1)
+        if (audioType == -1)
         {
             selectedClips = minCollisions;
             chosenClip = selectedClips[UnityEngine.Random.Range(0, selectedClips.Length)];
-            source.PlayOneShot(chosenClip);
+            audio.PlayOneShot(chosenClip);
         }
     }
 
@@ -3116,7 +3436,7 @@ public class HaulerController : VehicleController
         {
             carStress = 0f;
             DealPermanentDamage(2, default(Vector3));
-            lastDamageType = "Stress";
+            lastDamageType = "; Stress";
         }
     }
 
@@ -3131,15 +3451,14 @@ public class HaulerController : VehicleController
         syncedCarHP = carHP;
         if (carHP <= 0)
         {
-            SyncCarHealthRpc(carHP);
-            DestroyCarRpc();
+            DestroyCarRpc(carHP);
             DestroyCar();
             return;
         }
         DealDamageRpc(carHP);
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void DealDamageRpc(int carHealth)
     {
         timeAtLastDamage = Time.realtimeSinceStartup;
@@ -3149,11 +3468,13 @@ public class HaulerController : VehicleController
 
 
     // --- DESTRUCTION ---
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
-    public void DestroyCarRpc()
+    [Rpc(SendTo.NotOwner)]
+    public void DestroyCarRpc(int setHealth)
     {
+        timeAtLastDamage = Time.realtimeSinceStartup;
+        carHP = setHealth;
+        syncedCarHP = carHP;
         DestroyCar();
-        timeSinceLastCollision = Time.realtimeSinceStartup;
     }
 
     public new void DestroyCar()
@@ -3162,7 +3483,7 @@ public class HaulerController : VehicleController
             return;
 
         carDestroyed = true;
-        UnMagnetCar();
+        DeMagnetCar();
         RemoveRainCollision();
         StopAudiosPlayback();
         StopParticleVFX();
@@ -3193,7 +3514,7 @@ public class HaulerController : VehicleController
         Landmine.SpawnExplosion(transform.position + transform.forward + Vector3.up * 1.5f, spawnExplosionEffect: true, 10f, 13f, 40, 400f, truckDestroyedExplosion, goThroughCar: true);
     }
 
-    private void UnMagnetCar()
+    private void DeMagnetCar()
     {
         if (!magnetedToShip || StartOfRound.Instance.attachedVehicle != this)
             return;
@@ -3231,6 +3552,8 @@ public class HaulerController : VehicleController
         cabinAudio.Stop();
         roofRainAudioActive = false;
         roofRainAudio.Stop();
+        setAudiosMuted = false;
+        SetVehicleAudioMuted(false);
     }
 
     private void StopParticleVFX()
@@ -3287,7 +3610,6 @@ public class HaulerController : VehicleController
         if (carExhaustParticle.isEmitting) carExhaustParticle.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         keyIsInIgnition = false;
         keyIsInDriverHand = false;
-        twistingKey = false;
     }
 
     private void DisableDrivetrain()
@@ -3321,6 +3643,8 @@ public class HaulerController : VehicleController
         InteractTrigger[] interactTriggers = this.gameObject.GetComponentsInChildren<InteractTrigger>();
         for (int i = 0; i < interactTriggers.Length; i++)
         {
+            if (interactTriggers[i].isLadder)
+                continue;
             interactTriggers[i].interactable = false;
             interactTriggers[i].CancelAnimationExternally();
         }
@@ -3341,34 +3665,34 @@ public class HaulerController : VehicleController
     {
         var particleTriggers = new[]
         {
-            ScandalsTweaks.Utils.References.rainParticles,
-            ScandalsTweaks.Utils.References.rainHitParticles,
-            ScandalsTweaks.Utils.References.stormyRainParticles,
-            ScandalsTweaks.Utils.References.stormyRainHitParticles,
-            ScandalsTweaks.Utils.References.wesleyHurricaneRainParticles,
-            ScandalsTweaks.Utils.References.wesleyHurricaneRainHitParticles,
-            ScandalsTweaks.Utils.References.wesleyHurricaneSandParticles,
-            ScandalsTweaks.Utils.References.wesleyForsakenRainParticles,
-            ScandalsTweaks.Utils.References.wesleyForsakenRainHitParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidRainParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidRainHitParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidStormyRainParticles,
-            ScandalsTweaks.Utils.References.kenjiAcidStormyRainHitParticles
+            ScandalLib.Utils.References.rainParticles,
+            ScandalLib.Utils.References.rainHitParticles,
+            ScandalLib.Utils.References.stormyRainParticles,
+            ScandalLib.Utils.References.stormyRainHitParticles,
+            ScandalLib.Utils.References.wesleyHurricaneRainParticles,
+            ScandalLib.Utils.References.wesleyHurricaneRainHitParticles,
+            ScandalLib.Utils.References.wesleyHurricaneSandParticles,
+            ScandalLib.Utils.References.wesleyForsakenRainParticles,
+            ScandalLib.Utils.References.wesleyForsakenRainHitParticles,
+            ScandalLib.Utils.References.kenjiAcidRainParticles,
+            ScandalLib.Utils.References.kenjiAcidRainHitParticles,
+            ScandalLib.Utils.References.kenjiAcidStormyRainParticles,
+            ScandalLib.Utils.References.kenjiAcidStormyRainHitParticles
         };
 
         foreach (var particle in particleTriggers)
         {
             if (particle == null)
             {
-                Plugin.LogDebug("Weather particle or Trigger is null!");
+                Plugin.LogDebug("Weather particle or Trigger is null.");
                 continue;
             }
 
             var trigger = particle.trigger;
             for (int j = trigger.colliderCount - 1; j >= 0; j--)
             {
-                var collider = (Collider)trigger.GetCollider(j);
-                if (weatherEffectBlockers.Contains(collider))
+                var collider = trigger.GetCollider(j);
+                if (collider != null && weatherEffectBlockers.Contains(collider))
                 {
                     trigger.RemoveCollider(j);
                 }
@@ -3391,7 +3715,6 @@ public class HaulerController : VehicleController
 
         if (carDestroyed)
         {
-            SetPreviousVehiclePosition();
             return;
         }
 
@@ -3423,7 +3746,6 @@ public class HaulerController : VehicleController
             SetCarPhysicsValuesOnClient();
             SetTorqueForces();
             CalculateWheelSlip();
-            SetPreviousVehiclePosition();
             return;
         }
 
@@ -3439,13 +3761,11 @@ public class HaulerController : VehicleController
         if (mainRigidbody.IsSleeping() || magnetedToShip || allWheelsAirborne)
         {
             CalculateWheelSlip();
-            SetPreviousVehiclePosition();
             return;
         }
 
         ApplyAntiSlipForce();
         CalculateWheelSlip(calculatePhysics: true);
-        SetPreviousVehiclePosition();
     }
 
     private void SetCarPhysicsValuesOnClient()
@@ -3466,15 +3786,10 @@ public class HaulerController : VehicleController
         reverseWheelSpeed = -8000f;
     }
 
-    private void SetPreviousVehiclePosition()
-    {
-        previousVehiclePosition = mainRigidbody.position;
-        previousVehicleRotation = mainRigidbody.rotation;
-    }
-
     private void SetVehicleToDropship()
     {
-        if (StartOfRound.Instance.inShipPhase ||
+        if (hasBeenSpawned ||
+            IsInShipPhaseAndNotLoadingLevel() ||
             loadedVehicleFromSave ||
             hasDeliveredVehicle)
             return;
@@ -3541,7 +3856,6 @@ public class HaulerController : VehicleController
 
         SetVehicleKinematic(setKinematic: true);
         Vector3 syncVel = syncedPosition + (averageVelocity * Time.fixedDeltaTime);
-        //Mathf.Clamp(syncSpeedMultiplier * Vector3.Distance(mainRigidbody.position, syncVel), 1.3f, 300f);
         Vector3 position = Vector3.Lerp(mainRigidbody.position, syncVel, Time.fixedDeltaTime * syncSpeedMultiplier);
         mainRigidbody.MovePosition(position);
         mainRigidbody.MoveRotation(Quaternion.Lerp(mainRigidbody.rotation, syncedRotation, syncRotationSpeed));
@@ -3607,7 +3921,7 @@ public class HaulerController : VehicleController
         MagnetCarRpc(magnetTargetPosition, eulerAngles, magnetStartPosition, magnetStartRotation, tempRotation, averageVelocityAtMagnetStart);
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void MagnetCarRpc(Vector3 targetPosition, Vector3 targetRotation, Vector3 startPosition, Quaternion startRotation, Vector3 tempRotation, Vector3 avgVel)
     {
         SetVehicleKinematic(setKinematic: true);
@@ -3694,7 +4008,7 @@ public class HaulerController : VehicleController
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void SyncWheelTorqueRpc(float motorTorque, float brakeTorque)
     {
         syncedCurrentMotorTorque = motorTorque;
@@ -3708,11 +4022,11 @@ public class HaulerController : VehicleController
         syncThreshold = Mathf.Clamp(syncThreshold, 0.15f, 0.21f);
         if (syncDrivetrainInterval >= syncThreshold)
         {
-            float engineSpeed = NormaliseFloat(Mathf.Round(EngineRPM));
+            float engineSpeed = Mathf.Round(EngineRPM);
 
-            float wheelSyncRPM = NormaliseFloat(Mathf.Round(wheelRPM));
-            float fWheelSyncRPM = NormaliseFloat(Mathf.Round(frontWheelRPM));
-            float bWheelSyncRPM = NormaliseFloat(Mathf.Round(backWheelRPM));
+            float wheelSyncRPM = Mathf.Round(wheelRPM);
+            float fWheelSyncRPM = Mathf.Round(frontWheelRPM);
+            float bWheelSyncRPM = Mathf.Round(backWheelRPM);
 
             if (syncedWheelRPM != wheelSyncRPM ||
                 syncedEngineRPM != engineSpeed)
@@ -3735,7 +4049,7 @@ public class HaulerController : VehicleController
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void SyncDrivetrainRpc(float frontWheelSpeed, float backWheelSpeed, float wheelSpeed, float engineSpeed)
     {
         syncedFrontWheelRPM = frontWheelSpeed;
@@ -3777,7 +4091,7 @@ public class HaulerController : VehicleController
         }
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void SyncCarPositionRpc(Vector3 carPosition, Vector3 carRotation)
     {
         syncCarPositionInterval = 0f;
@@ -3820,7 +4134,7 @@ public class HaulerController : VehicleController
         SetTorqueToWheelCollider(BackRightWheel, currentMotorTorque, currentBrakeTorque);
         bRpmDiff = BackLeftWheel.rpm - BackRightWheel.rpm; // difference in rpm
 
-        ApplyTorqueDifference();
+        //ApplyTorqueDifference();
         SetWheelRotationVelocity();
     }
 
@@ -3882,22 +4196,14 @@ public class HaulerController : VehicleController
 
         float selectedGear = Mathf.Abs(gearRatios[currentGear]);
         float absWheelSpeed = Mathf.Abs(wheelRPM);
-        float wheelSpeed = absWheelSpeed * selectedGear * diffRatio;
 
         // hill assist
-        float slopeAngle = Vector3.Angle(transform.forward, Vector3.ProjectOnPlane(transform.forward, Vector3.up)); // get the slope angle
-        float dot = Vector3.Dot(transform.forward, Vector3.up);
+        float uphillDot = Vector3.Dot(transform.forward, Vector3.up);
+        float inclineAngle = Vector3.Angle(transform.forward, Vector3.ProjectOnPlane(transform.forward, Vector3.up)); // get the slope angle
+        float assistFactor = Mathf.InverseLerp(110f, 0f, absWheelSpeed); // rpm the assist is active up until
+        float inclineFactor = uphillDot > 0f ? Mathf.Clamp01(inclineAngle / maxInclineBoostAngle) * assistFactor : 0f; // only apply uphill
 
-        float load = Mathf.Clamp01(Mathf.Abs(EngineRPM - wheelSpeed) / 800f); // rpm difference between the wheels and the engine
-        float assistValue = Mathf.InverseLerp(110f, 0f, absWheelSpeed); // rpm the assist is active up until
-        float assist = Mathf.Clamp01(dot) * assistValue * load; // assist rate
-
-        float slopeValue = 0f;
-        if (dot > 0f) // only apply uphill
-        {
-            slopeValue = Mathf.Clamp01(slopeAngle / maxInclineBoostAngle);
-        }
-        inclineBoost = Mathf.Lerp(minInclineBoost, maxInclineBoost, slopeValue * assistValue);
+        inclineBoost = Mathf.Lerp(minInclineBoost, maxInclineBoost, inclineFactor);
     }
 
     private void UpdateTransmission()
@@ -3963,7 +4269,6 @@ public class HaulerController : VehicleController
         {
             return;
         }
-
         float vehicleStress = 0f;
         switch (gear)
         {
@@ -3971,7 +4276,7 @@ public class HaulerController : VehicleController
                 {
                     if (drivePedalPressed)
                     {
-                        vehicleStress += 1.2f;
+                        vehicleStress += 3.25f;
                         lastStressType += "; Accelerating while in park";
                     }
                     else if (!allWheelsAirborne && Mathf.Abs(wheelRPM) > 150f)
@@ -3988,8 +4293,8 @@ public class HaulerController : VehicleController
 
     private void UpdateEngineRPMFromWheels()
     {
-        frontWheelRPM = (NormaliseFloat(FrontLeftWheel.rpm) + NormaliseFloat(FrontRightWheel.rpm)) / 2f;
-        backWheelRPM = (NormaliseFloat(BackLeftWheel.rpm) + NormaliseFloat(BackRightWheel.rpm)) / 2f;
+        frontWheelRPM = (FrontLeftWheel.rpm + FrontRightWheel.rpm) / 2f;
+        backWheelRPM = (BackLeftWheel.rpm + BackRightWheel.rpm) / 2f;
         wheelRPM = (frontWheelRPM + backWheelRPM) / 2f;
         float wheelSpeed = Mathf.Abs(wheelRPM);
 
@@ -4135,16 +4440,9 @@ public class HaulerController : VehicleController
 
 
     // --- HELPER FUNCTIONS ---
-    public float NormaliseFloat(float num)
-    {
-        if (float.IsNaN(num) || float.IsInfinity(num) ||
-            float.IsNegativeInfinity(num) || float.IsPositiveInfinity(num))
-            return 0f;
-        return num;
-    }
-
     private void MatchWheelMeshToCollider(MeshRenderer wheelMesh, WheelCollider wheelCollider, float wheelSpeed, float steeringInput = 0f)
     {
+        /*
         Vector3 position = wheelCollider.transform.position;
         if (Physics.Raycast(position, -wheelCollider.transform.up, out hit, wheelCollider.suspensionDistance + wheelCollider.radius, 2305))
         {
@@ -4154,9 +4452,15 @@ public class HaulerController : VehicleController
         {
             wheelMesh.transform.position = position - wheelCollider.transform.up * wheelCollider.suspensionDistance;
         }
-        //wheelCollider.GetWorldPose(out Vector3 wheelPosition, out Quaternion wheelRotation);
-        //wheelMesh.transform.position = wheelPosition;
-        //wheelMesh.transform.rotation = wheelRotation;
+        */
+
+        /*
+        wheelCollider.GetWorldPose(out Vector3 wheelPosition, out Quaternion wheelRotation);
+        wheelMesh.transform.position = wheelPosition;
+        wheelMesh.transform.rotation = wheelRotation;
+        */
+        wheelCollider.GetWorldPose(out Vector3 wheelPosition, out _);
+        wheelMesh.transform.position = wheelPosition;
         wheelMesh.transform.localRotation = Quaternion.Euler(wheelSpeed, steeringInput, 0.0f);
     }
 
@@ -4166,51 +4470,18 @@ public class HaulerController : VehicleController
     {
         if (destroyNextFrame)
         {
+            Destroy(base.windwiperPhysicsBody1.gameObject);
+            Destroy(base.windwiperPhysicsBody2.gameObject);
+            Destroy(base.ragdollPhysicsBody.gameObject);
             if (IsOwner)
             {
-                Destroy(base.windwiperPhysicsBody1.gameObject);
-                Destroy(base.windwiperPhysicsBody2.gameObject);
-                Destroy(base.ragdollPhysicsBody.gameObject);
-                Destroy(this.playerPhysicsBody.gameObject);
                 Destroy(base.gameObject);
             }
             return;
         }
         if (NetworkObject != null && !NetworkObject.IsSpawned)
         {
-            RemoveRainCollision();
-            vehicleZone.disablePhysicsRegion = true;
-            if (StartOfRound.Instance.CurrentPlayerPhysicsRegions.Contains(vehicleZone))
-            {
-                StartOfRound.Instance.CurrentPlayerPhysicsRegions.Remove(vehicleZone);
-            }
-            for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
-            {
-                PlayerControllerB playerController = StartOfRound.Instance.allPlayerScripts[i];
-                if (playerController.transform.parent == vehicleZone.physicsTransform)
-                {
-                    Transform playerTransform = playerController.isInElevator ? playerController.playersManager.elevatorTransform : playerController.playersManager.playersContainer;
-                    playerController.transform.SetParent(playerTransform);
-                    Plugin.LogWarning($"Player {i} setting parent since vehicle was removed");
-                }
-            }
-            if (IsPlayerSeatedInCar())
-                GameNetworkManager.Instance.localPlayerController.CancelSpecialTriggerAnimations();
-            GrabbableObject[] itemsInTruck = vehicleZone.physicsTransform.GetComponentsInChildren<GrabbableObject>();
-            for (int i = 0; i < itemsInTruck.Length; i++)
-            {
-                if (RoundManager.Instance.mapPropsContainer != null)
-                {
-                    itemsInTruck[i].transform.SetParent(RoundManager.Instance.mapPropsContainer.transform, worldPositionStays: true);
-                }
-                else
-                {
-                    itemsInTruck[i].transform.SetParent(null, worldPositionStays: true);
-                }
-
-                if (!itemsInTruck[i].isHeld)
-                    itemsInTruck[i].FallToGround(false, false, default(Vector3));
-            }
+            OnVehicleDisable();
             destroyNextFrame = true;
             return;
         }
@@ -4243,36 +4514,13 @@ public class HaulerController : VehicleController
             {
                 StartOfRound.Instance.attachedVehicle = null;
             }
-            //if (IsOwner)
-            //{
-            //    if (enabledCollisionForAllPlayers)
-            //    {
-            //        enabledCollisionForAllPlayers = false;
-            //        DisableVehicleCollisionForAllPlayers();
-            //    }
-            //}
-            //else
-            //{
-            //    if (!enabledCollisionForAllPlayers)
-            //    {
-            //        enabledCollisionForAllPlayers = true;
-            //        EnableVehicleCollisionForAllPlayers();
-            //    }
-            //}
         }
 
         ReactToDamage();
-
         if (carDestroyed)
         {
             return;
         }
-
-        //HUDManager.Instance.enableConsoleLogging = true;
-        //HUDManager.Instance.SetDebugText($"isPlayerInCab? {vehicleCabZone.playerInZone}\n " +
-        //                                 $"isPlayerOnTruck? {vehicleZone.playerInZone}\n " +
-        //                                 $"isPlayerParented? {GameNetworkManager.Instance.localPlayerController.physicsParent}\n" +
-        //                                 $"isHasLocalPlayer? {vehicleZone.hasLocalPlayer}");
 
         SetCarEffects(steeringWheelAnimValue);
         UpdateOccupantAnimations();
@@ -4316,7 +4564,7 @@ public class HaulerController : VehicleController
 
 
     // --- DAMAGE/HEALTH SYNC ---
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     private void SyncCarHealthRpc(int carHealth)
     {
         timeAtLastDamage = Time.realtimeSinceStartup;
@@ -4324,7 +4572,7 @@ public class HaulerController : VehicleController
         carHP = syncedCarHP;
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void SyncExtremeStressRpc(bool underStress)
     {
         if (carDestroyed)
@@ -4345,7 +4593,7 @@ public class HaulerController : VehicleController
         SetHoodOnFireRpc(setOnFire);
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void SetHoodOnFireRpc(bool onFire)
     {
         SetHoodOnFireLocalClient(onFire);
@@ -4370,7 +4618,7 @@ public class HaulerController : VehicleController
     public new void ToggleHoodOpenLocalClient()
     {
         carHoodOpen = !carHoodOpen;
-        carHoodAnimator.SetBool("hoodOpen", carHoodOpen);
+        carHoodAnimator.SetBool(HOOD_ANIMATION_BOOL, carHoodOpen);
         SetHoodOpenRpc(open: carHoodOpen);
     }
 
@@ -4381,14 +4629,14 @@ public class HaulerController : VehicleController
             return;
 
         carHoodOpen = setOpen;
-        carHoodAnimator.SetBool("hoodOpen", setOpen);
+        carHoodAnimator.SetBool(HOOD_ANIMATION_BOOL, setOpen);
     }
 
     [Rpc(SendTo.NotMe, RequireOwnership = false)]
     public void SetHoodOpenRpc(bool open)
     {
         carHoodOpen = open;
-        carHoodAnimator.SetBool("hoodOpen", carHoodOpen);
+        carHoodAnimator.SetBool(HOOD_ANIMATION_BOOL, carHoodOpen);
     }
 
 
@@ -4403,54 +4651,28 @@ public class HaulerController : VehicleController
             !ignitionStarted)
             return;
 
-        currentDriver.playerBodyAnimator.SetFloat(ANIMATION_SPEED, playerSteeringWheelAnimFloat); // player steering animation
-        currentDriver.playerBodyAnimator.SetFloat(CAR_MOTION_TIME, gearStickAnimValue); // vehicle gearstick --> player gearstick animation position
-
         int currentAnimIndex = 1;
         if (playerWhoShifted == currentDriver && Time.realtimeSinceStartup - timeAtLastGearShift < 1.35f) currentAnimIndex = 5;
         currentDriver.playerBodyAnimator.SetInteger(CAR_ANIM, currentAnimIndex);
+
+        currentDriver.playerBodyAnimator.SetFloat(ANIMATION_SPEED, playerSteeringWheelAnimFloat); // player steering animation
+        currentDriver.playerBodyAnimator.SetFloat(CAR_MOTION_TIME, gearStickAnimValue); // vehicle gearstick --> player gearstick animation position
     }
 
 
     // --- AFTER UPDATE ---
     public new void LateUpdate()
     {
-        if (carDestroyed)
-        {
-            return;
-        }
-
         if (currentDriver != null && lastDriver != currentDriver && !magnetedToShip)
             lastDriver = currentDriver;
-
-        if (honkingHorn && hornAudio.isPlaying && hornAudio.pitch < 1f)
-            hornAudio.Stop();
-
-        bool shipInOrbit = magnetedToShip && (StartOfRound.Instance.inShipPhase || !StartOfRound.Instance.shipDoorsEnabled);
-        SetAudiosMuted(setMuted: shipInOrbit);
-        /*
-        if (shipInOrbit && windshieldBroken)
-            RegenerateWindshield();
-        */
     }
 
-    public void SetAudiosMuted(bool setMuted)
+    public void SetVehicleAudioMuted(bool setMuted)
     {
-        hornAudio.mute = setMuted;
-        engineAudio1.mute = setMuted;
-        engineAudio2.mute = setMuted;
-
-        cabinAudio.mute = setMuted;
-        carKeyAudio.mute = setMuted;
-        rollingAudio.mute = setMuted;
-        skiddingAudio.mute = setMuted;
-
-        turbulenceAudio.mute = setMuted;
-        hoodFireAudio.mute = setMuted;
-        extremeStressAudio.mute = setMuted;
-        pushAudio.mute = setMuted;
-        radioAudio.mute = setMuted;
-        radioInterference.mute = setMuted;
+        for (int i = 0; i < allVehicleAudios.Length; i++)
+        {
+            allVehicleAudios[i].mute = setMuted;
+        }
     }
 
 
@@ -4507,12 +4729,18 @@ public class HaulerController : VehicleController
         PlayerControllerB playerController = GameNetworkManager.Instance.localPlayerController;
         if (playerController == null ||
             playerController.isPlayerDead ||
-            !playerController.isPlayerControlled) return;
-        if (playerController.isTypingChat ||
-            playerController.quickMenuManager.isMenuOpen) return;
+            !playerController.isPlayerControlled) 
+            return;
 
-        if (!localPlayerInControl || !ignitionStarted ||
-            jumpingInCar || keyIsInDriverHand) return;
+        if (!localPlayerInControl)
+            return;
+
+        if (playerController.isTypingChat ||
+            playerController.quickMenuManager.isMenuOpen) 
+            return;
+
+        if (!ignitionStarted || jumpingInCar || keyIgnitionCoroutine != null)
+            return;
 
         Vector2 dir = InputSystem.actions.FindAction(PLAYER_MOVEMENT, false).ReadValue<Vector2>();
         UseTurboBoostLocalClient(dir);
@@ -4546,7 +4774,7 @@ public class HaulerController : VehicleController
         yield break;
     }
 
-    [Rpc(SendTo.NotOwner, RequireOwnership = false)]
+    [Rpc(SendTo.NotOwner)]
     public void UseTurboBoostRpc()
     {
         UseTurboBoostLocalClient(default(Vector2));
@@ -4618,7 +4846,8 @@ public class HaulerController : VehicleController
 
 
     // --- REMOVAL ---
-    public new void OnDisable()
+
+    public void OnVehicleDisable()
     {
         RemoveRainCollision();
         DisableControl();
@@ -4637,26 +4866,36 @@ public class HaulerController : VehicleController
                 Plugin.LogWarning($"Player {i} setting parent since vehicle was disabled");
             }
         }
+        PlayerControllerB localPlayerController = GameNetworkManager.Instance.localPlayerController;
         if (IsPlayerSeatedInCar())
-            GameNetworkManager.Instance.localPlayerController.CancelSpecialTriggerAnimations();
-        GrabbableObject[] itemsInTruck = vehicleZone.physicsTransform.GetComponentsInChildren<GrabbableObject>();
-        for (int i = 0; i < itemsInTruck.Length; i++)
+        {
+            localPlayerController?.CancelSpecialTriggerAnimations();
+        }
+        GrabbableObject[] componentsInChildren = physicsRegion.physicsTransform.GetComponentsInChildren<GrabbableObject>();
+        for (int i = 0; i < componentsInChildren.Length; i++)
         {
             if (RoundManager.Instance.mapPropsContainer != null)
             {
-                itemsInTruck[i].transform.SetParent(RoundManager.Instance.mapPropsContainer.transform, worldPositionStays: true);
+                componentsInChildren[i].transform.SetParent(RoundManager.Instance.mapPropsContainer.transform, worldPositionStays: true);
             }
             else
             {
-                itemsInTruck[i].transform.SetParent(null, worldPositionStays: true);
+                componentsInChildren[i].transform.SetParent(null, worldPositionStays: true);
             }
-
-            if (!itemsInTruck[i].isHeld)
-                itemsInTruck[i].FallToGround(false, false, default(Vector3));
+            if (!componentsInChildren[i].isHeld)
+            {
+                componentsInChildren[i].FallToGround(false, false, default(Vector3));
+            }
         }
     }
 
+    public new void OnDisable()
+    {
+        OnVehicleDisable();
+    }
 
+
+    // --- MISC ---
     public void PlayLeftDashboardButtonPress()
     {
         leftDashboardAudio.PlayOneShot(dashButtonPress);
@@ -4745,5 +4984,59 @@ public class HaulerController : VehicleController
 
         speedometerImage.material = on ? speedometerOnMaterial : speedometerOffMaterial;
         tachometerImage.material = on ? tachometerOnMaterial : tachometerOffMaterial;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPlayerOnOutside(PlayerControllerB playerScript)
+    {
+        return IsPlayerAttached(playerScript) &&
+               !IsPlayerInCab(playerScript) &&
+               !IsPlayerSeated(playerScript);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPlayerInCab(PlayerControllerB player)
+    {
+        return player != null && player is IPlayerManager playerInterface &&
+            playerInterface.CurrentPlayerZone != null && playerInterface.CurrentPlayerZone == vehicleCabZone;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsCabinEnclosed()
+    {
+        return !driverSideDoor.boolValue && !passengerSideDoor.boolValue &&
+               !backLeftDoor.boolValue && !backRightDoor.boolValue &&
+               !frontLeftWindow.isWindowOpen && !frontRightWindow.isWindowOpen &&
+               !backLeftWindow.isWindowOpen && !backRightWindow.isWindowOpen &&
+               !windshieldBroken && !sunroofOpen;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPlayerInCabinOrSeated(PlayerControllerB player)
+    {
+        return player != null && player is IPlayerManager playerInterface &&
+            ((playerInterface.CurrentPlayerZone != null && playerInterface.CurrentPlayerZone == vehicleCabZone) ||
+            (player.overridePhysicsParent != null && player.overridePhysicsParent == transform));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPlayerInCabin(PlayerControllerB player)
+    {
+        return player != null && player is IPlayerManager playerInterface &&
+            playerInterface.CurrentPlayerZone != null && playerInterface.CurrentPlayerZone == vehicleCabZone &&
+            player.overridePhysicsParent == null;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPlayerAttached(PlayerControllerB player)
+    {
+        return player != null && player is IPlayerManager playerInterface &&
+            playerInterface.CurrentPlayerPhysicsRegion != null && playerInterface.CurrentPlayerPhysicsRegion == vehicleZone;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsPlayerSeated(PlayerControllerB player)
+    {
+        return player != null && player.overridePhysicsParent != null && player.overridePhysicsParent == transform;
     }
 }

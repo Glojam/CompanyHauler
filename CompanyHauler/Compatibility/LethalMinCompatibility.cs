@@ -13,7 +13,6 @@ namespace CompanyHauler.Compatibility;
 ///  Available from BrutalCompanyMinusExtraReborn, licensed under GNU General Public License.
 ///  Source: https://github.com/TheSoftDiamond/BrutalCompanyMinusExtraReborn
 /// </summary>
-[HarmonyPatch]
 public static class LethalMinCompatibility
 {
     [HarmonyPatch(typeof(PikminVehicleController), nameof(PikminVehicleController.InitializeReferences))]

@@ -77,7 +77,6 @@ public class HaulerCollisionTrigger : MonoBehaviour
                     if (velocityMagnitude > 15f) damage = 80;
                     else if (velocityMagnitude > 12f) damage = 60;
                     else if (velocityMagnitude > 8f) damage = 40;
-
                     if (damage > 0)
                     {
                         GameNetworkManager.Instance.localPlayerController.DamagePlayer(damage, hasDamageSFX: true, callRPC: true, CauseOfDeath.Crushing, 0, fallDamage: false, impactForce);

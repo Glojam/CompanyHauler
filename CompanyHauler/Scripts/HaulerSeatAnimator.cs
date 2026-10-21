@@ -1,5 +1,4 @@
-﻿using CompanyHauler.Utils;
-using GameNetcodeStuff;
+﻿using GameNetcodeStuff;
 using ScandalLib.Scripts;
 
 namespace CompanyHauler.Scripts;
@@ -10,11 +9,11 @@ public class HaulerSeatAnimator : VehicleSeatAnimator
 
     public override void OnPlayerLeaveGame()
     {
-        if (seatTrigger == vehicleController.driverSeatTrigger) vehicleController.OnDriverLeaveGameServerRpc((int)seatTrigger.playerScriptInSpecialAnimation.playerClientId);
-        else if (seatTrigger == vehicleController.passengerSeatTrigger) vehicleController.OnPassengerLeaveGameRpc((int)seatTrigger.playerScriptInSpecialAnimation.playerClientId);
-        else if (seatTrigger == vehicleController.backLeftPassengerSeatTrigger) vehicleController.OnBackLeftPassengerLeaveGameRpc((int)seatTrigger.playerScriptInSpecialAnimation.playerClientId);
-        else if (seatTrigger == vehicleController.backPassengerSeatTrigger) vehicleController.OnBackMiddlePassengerLeaveGameRpc((int)seatTrigger.playerScriptInSpecialAnimation.playerClientId);
-        else if (seatTrigger == vehicleController.backRightPassengerSeatTrigger) vehicleController.OnBackRightPassengerLeaveGameRpc((int)seatTrigger.playerScriptInSpecialAnimation.playerClientId);
+        if (seatTrigger == vehicleController.driverSeatTrigger) vehicleController.OnDriverLeaveGameServerRpc(seatTrigger.playerScriptInSpecialAnimation);
+        else if (seatTrigger == vehicleController.passengerSeatTrigger) vehicleController.OnPassengerLeaveGameRpc(seatTrigger.playerScriptInSpecialAnimation);
+        else if (seatTrigger == vehicleController.backLeftPassengerSeatTrigger) vehicleController.OnBackLeftPassengerLeaveGameRpc(seatTrigger.playerScriptInSpecialAnimation);
+        else if (seatTrigger == vehicleController.backPassengerSeatTrigger) vehicleController.OnBackMiddlePassengerLeaveGameRpc(seatTrigger.playerScriptInSpecialAnimation);
+        else if (seatTrigger == vehicleController.backRightPassengerSeatTrigger) vehicleController.OnBackRightPassengerLeaveGameRpc(seatTrigger.playerScriptInSpecialAnimation);
         else return;
     }
 
